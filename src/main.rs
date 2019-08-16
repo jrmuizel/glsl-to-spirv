@@ -47,8 +47,7 @@ void main()
   b.memory_model(spirv::AddressingModel::Logical, spirv::MemoryModel::GLSL450);
 
 
-  let mut state = OutputState { hir: state, indent: 0,
-    should_indent: false,
+  let mut state = OutputState { hir: state,
     in_loop_declaration: false,
     mask: None,
     return_type: None,
@@ -87,8 +86,6 @@ pub struct Variable {
 pub struct OutputState {
   builder: rspirv::mr::Builder,
   hir: hir::State,
-  should_indent: bool,
-  indent: i32,
   in_loop_declaration: bool,
   mask: Option<Box<hir::Expr>>,
   return_type: Option<Box<syntax::FullySpecifiedType>>,
@@ -96,15 +93,6 @@ pub struct OutputState {
   flat: bool,
   emitted_types: HashMap<String, Word>,
   emitted_syms: HashMap<hir::SymRef, Variable>,
-}
-
-impl OutputState {
-  fn indent(&mut self) {
-    if self.should_indent { self.indent += 1 }
-  }
-  fn outdent(&mut self) {
-    if self.should_indent { self.indent -= 1 }
-  }
 }
 
 use std::fmt::Write;
@@ -806,7 +794,6 @@ pub fn translate_declaration(state: &mut OutputState, d: &hir::Declaration) {
 }
 
 pub fn show_declaration<F>(f: &mut F, state: &mut OutputState, d: &hir::Declaration) where F: Write {
-  show_indent(f, state);
   match *d {
     hir::Declaration::FunctionPrototype(ref proto) => {
       show_function_prototype(f, state, &proto);
@@ -1024,16 +1011,12 @@ pub fn translate_function_definition(state: &mut OutputState, fd: &hir::Function
 }
 
 pub fn show_compound_statement<F>(f: &mut F, state: &mut OutputState, cst: &hir::CompoundStatement) where F: Write {
-  show_indent(f, state);
   let _ = f.write_str("{\n");
 
-  state.indent();
   for st in &cst.statement_list {
     show_statement(f, state, st);
   }
-  state.outdent();
 
-  show_indent(f, state);
   let _ = f.write_str("}\n");
 }
 
@@ -1080,16 +1063,7 @@ pub fn translate_simple_statement(state: &mut OutputState, sst: &hir::SimpleStat
   }
 }
 
-
-pub fn show_indent<F>(f: &mut F, state: &mut OutputState) where F: Write {
-  for i in 0..state.indent {
-    let _ = f.write_str(" ");
-  }
-}
-
 pub fn show_expression_statement<F>(f: &mut F, state: &mut OutputState, est: &hir::ExprStatement) where F: Write {
-  show_indent(f, state);
-
   if let Some(ref e) = *est {
     show_hir_expr(f, state, e);
   }
@@ -1105,11 +1079,9 @@ pub fn translate_expression_statement(state: &mut OutputState, est: &hir::ExprSt
 }
 
 pub fn show_selection_statement<F>(f: &mut F, state: &mut OutputState, sst: &hir::SelectionStatement) where F: Write {
-    show_indent(f, state);
     let _ = f.write_str("if (");
     show_hir_expr(f, state, &sst.cond);
     let _ = f.write_str(") {\n");
-    state.indent();
     show_selection_rest_statement(f, state, &sst.rest);
 }
 
@@ -1117,14 +1089,10 @@ pub fn show_selection_rest_statement<F>(f: &mut F, state: &mut OutputState, sst:
   match *sst {
     hir::SelectionRestStatement::Statement(ref if_st) => {
       show_statement(f, state, if_st);
-      state.outdent();
-      show_indent(f, state);
       let _ = f.write_str("}\n");
     }
     hir::SelectionRestStatement::Else(ref if_st, ref else_st) => {
       show_statement(f, state, if_st);
-      state.outdent();
-      show_indent(f, state);
       let _ = f.write_str("} else ");
       show_statement(f, state, else_st);
     }
@@ -1132,28 +1100,21 @@ pub fn show_selection_rest_statement<F>(f: &mut F, state: &mut OutputState, sst:
 }
 
 pub fn show_switch_statement<F>(f: &mut F, state: &mut OutputState, sst: &hir::SwitchStatement) where F: Write {
-  show_indent(f, state);
   let _ = f.write_str("switch (");
   show_hir_expr(f, state, &sst.head);
   let _ = f.write_str(") {\n");
-  state.indent();
 
   for case in &sst.cases {
     show_case_label(f, state, &case.label);
-    state.indent();
     for st in &case.stmts {
       show_statement(f, state, st);
     }
-    state.outdent();
   }
-  state.outdent();
-  show_indent(f, state);
   let _ = f.write_str("}\n");
 
 }
 
 pub fn show_case_label<F>(f: &mut F, state: &mut OutputState, cl: &hir::CaseLabel) where F: Write {
-  show_indent(f, state);
   match *cl {
     hir::CaseLabel::Case(ref e) => {
       let _ = f.write_str("case ");
@@ -1165,7 +1126,6 @@ pub fn show_case_label<F>(f: &mut F, state: &mut OutputState, cl: &hir::CaseLabe
 }
 
 pub fn show_iteration_statement<F>(f: &mut F, state: &mut OutputState, ist: &hir::IterationStatement) where F: Write {
-  show_indent(f, state);
   match *ist {
     hir::IterationStatement::While(ref cond, ref body) => {
       let _ = f.write_str("while (");
@@ -1232,7 +1192,6 @@ pub fn show_for_rest_statement<F>(f: &mut F, state: &mut OutputState, r: &hir::F
 }
 
 pub fn show_jump_statement<F>(f: &mut F, state: &mut OutputState, j: &hir::JumpStatement) where F: Write {
-  show_indent(f, state);
   match *j {
     hir::JumpStatement::Continue => { let _ = f.write_str("continue;\n"); }
     hir::JumpStatement::Break => { let _ = f.write_str("break;\n"); }
