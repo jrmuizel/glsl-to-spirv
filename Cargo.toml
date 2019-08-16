@@ -1,0 +1,12 @@
+[package]
+name = "glsl-to-spirv"
+version = "0.1.0"
+authors = ["Jeff Muizelaar <jrmuizel@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+glsl = "1.1.0"
+rspirv = "0.5.4"
+spirv_headers = "1.3.4"
