@@ -21,7 +21,8 @@ fn main() {
 
 void main()
 {
-	gl_FragColor = vec4(0.4, 0.4, 0.8, 1.0);
+    float x = 0.1;
+	gl_FragColor = vec4(x, 0.4, 0.8, 1.0);
 }");
 
     /*void main() {
@@ -59,6 +60,8 @@ void main()
     flat: false,
     builder: b,
     emitted_types: HashMap::new(),
+    emitted_syms: HashMap::new(),
+
   };
 
   show_translation_unit(&mut output, &mut state, &hir);
@@ -81,6 +84,11 @@ void main()
   println!("{}", module.disassemble());
 }
 
+pub struct Variable {
+  location: Word,
+  ty: Word,
+}
+
 pub struct OutputState {
   builder: rspirv::mr::Builder,
   hir: hir::State,
@@ -92,7 +100,8 @@ pub struct OutputState {
   return_type: Option<Box<syntax::FullySpecifiedType>>,
   return_declared: bool,
   flat: bool,
-  emitted_types: HashMap<String, Word>
+  emitted_types: HashMap<String, Word>,
+  emitted_syms: HashMap<hir::SymRef, Variable>,
 }
 
 impl OutputState {
@@ -488,6 +497,17 @@ pub fn emit_vec4(state: &mut OutputState) -> Word {
   }
 }
 
+pub fn emit_void(state: &mut OutputState) -> Word {
+  match state.emitted_types.get("void") {
+    Some(t) => *t,
+    None => {
+      let void = state.builder.type_void();
+      state.emitted_types.insert("void".to_string(), void);
+      void
+    }
+  }
+}
+
 pub fn translate_lvalue_expr(state: &mut OutputState, expr: &hir::Expr) -> Word {
   match expr.kind {
     hir::ExprKind::Variable(ref i) => {
@@ -547,6 +567,10 @@ pub fn translate_r_val(state: &mut OutputState, expr: &hir::Expr) -> Word {
       let b = &mut state.builder;
       b.constant_f32(float, f as f32)
     }
+    hir::ExprKind::Variable(sym) => {
+      let v = &state.emitted_syms[&sym];
+      state.builder.load(v.ty, None, v.location, None, []).unwrap()
+    }
     _ => panic!()
   }
 }
@@ -555,15 +579,10 @@ pub fn translate_hir_expr(state: &mut OutputState, expr: &hir::Expr) {
   match expr.kind {
 
     hir::ExprKind::Assignment(ref v, ref op, ref e) => {
-
       let output_var = translate_lvalue_expr(state, v);
       let result = translate_r_val(state, e);
-      let b = &mut state.builder;
-
-      let _ = b.store(output_var, result, None, []);
-
+      let _ = state.builder.store(output_var, result, None, []);
     }
-
     _ => {}
   }
 }
@@ -812,6 +831,16 @@ pub fn show_hir_function_identifier<F>(f: &mut F, state: &mut OutputState, i: &h
   }
 }
 
+pub fn translate_declaration(state: &mut OutputState, d: &hir::Declaration) {
+  match *d {
+    hir::Declaration::InitDeclaratorList(ref list) => {
+
+      translate_init_declarator_list(state, &list);
+    }
+    _ => panic!()
+  }
+}
+
 pub fn show_declaration<F>(f: &mut F, state: &mut OutputState, d: &hir::Declaration) where F: Write {
   show_indent(f, state);
   match *d {
@@ -906,6 +935,33 @@ pub fn show_init_declarator_list<F>(f: &mut F, state: &mut OutputState, i: &hir:
   }
 }
 
+pub fn translate_initializer(state: &mut OutputState, i: &hir::Initializer) -> Word {
+  match *i {
+    hir::Initializer::Simple(ref e) => translate_r_val(state, e),
+    _ => panic!(),
+  }
+}
+
+pub fn translate_single_declaration(state: &mut OutputState, d: &hir::SingleDeclaration) {
+
+  let ty = emit_float(state);
+  let output_var = state.builder.variable(ty, None, spirv::StorageClass::Function, None);
+  state.emitted_syms.insert(d.name.unwrap(),  Variable{ location: output_var, ty });
+
+  if let Some(ref initializer) = d.initializer {
+    let init_val = translate_initializer(state, initializer);
+    state.builder.store(output_var, init_val, None, []);
+  }
+}
+
+pub fn translate_init_declarator_list(state: &mut OutputState, i: &hir::InitDeclaratorList) {
+  translate_single_declaration(state, &i.head);
+
+  for decl in &i.tail {
+    panic!()
+  }
+}
+
 pub fn show_single_declaration<F>(f: &mut F, state: &mut OutputState, d: &hir::SingleDeclaration) where F: Write {
   show_fully_specified_type(f, state, &d.ty);
 
@@ -971,20 +1027,17 @@ pub fn show_block<F>(f: &mut F, state: &mut OutputState, b: &hir::Block) where F
 }
 
 pub fn translate_type(state: &mut OutputState, ty: &syntax::FullySpecifiedType) -> spirv::Word {
-  state.builder.type_void()
+  emit_void(state)
 }
 
 pub fn show_function_definition<F>(f: &mut F, state: &mut OutputState, fd: &hir::FunctionDefinition) where F: Write {
-  show_function_prototype(f, state, &fd.prototype);
-  let _ = f.write_str(" ");
   state.return_type = Some(Box::new(fd.prototype.ty.clone()));
 
 
   let ret_type = translate_type(state, &fd.prototype.ty);
-
   {
+    let void = emit_void(state);
     let b = &mut state.builder;
-    let void = b.type_void();
     let voidf = b.type_function(void, vec![void]);
 
     let fun = b.begin_function(ret_type,
@@ -1053,10 +1106,8 @@ pub fn show_simple_statement<F>(f: &mut F, state: &mut OutputState, sst: &hir::S
 }
 
 pub fn translate_simple_statement(state: &mut OutputState, sst: &hir::SimpleStatement) {
-
-
   match *sst {
-    hir::SimpleStatement::Declaration(ref d) => panic!(), //show_declaration(f, state, d),
+    hir::SimpleStatement::Declaration(ref d) => translate_declaration(state, d),
     hir::SimpleStatement::Expression(ref e) => translate_expression_statement(state, e),
     hir::SimpleStatement::Selection(ref s) => panic!(), //show_selection_statement(f, state, s),
     hir::SimpleStatement::Switch(ref s) => panic!(), //show_switch_statement(f, state, s),

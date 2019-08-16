@@ -50,7 +50,7 @@ impl Type {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Copy)]
+#[derive(Clone, Debug, PartialEq, Copy, Eq, Hash)]
 pub struct SymRef(u32);
 
 #[derive(Debug)]
@@ -205,6 +205,8 @@ pub struct FunctionParameterDeclarator {
 /// Init declarator list.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InitDeclaratorList {
+    // XXX it feels like separating out the type and the names is better than
+    // head and tail
     pub head: SingleDeclaration,
     pub tail: Vec<SingleDeclarationNoType>
 }
