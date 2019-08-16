@@ -503,13 +503,8 @@ pub fn translate_lvalue_expr(state: &mut OutputState, expr: &hir::Expr) -> Word 
 }
 
 pub fn translate_const(state: &mut OutputState, c: &hir::Expr) -> Word {
-  // We could constant pool these things
   match c.kind {
-    hir::ExprKind::DoubleConst(f) => {
-      let float = emit_float(state);
-      let b = &mut state.builder;
-      b.constant_f32(float, f as f32)
-    }
+
     _ => panic!(),
   }
 }
@@ -518,12 +513,12 @@ pub fn translate_vec4(state: &mut OutputState, x: &hir::Expr, y: &hir::Expr, z: 
   let float = emit_float(state);
   let float_vec4 = emit_vec4(state);
   let args = [
-    translate_const(state, x),
-    translate_const(state, y),
-    translate_const(state, w),
-    translate_const(state, z)];
+    translate_r_val(state, x),
+    translate_r_val(state, y),
+    translate_r_val(state, w),
+    translate_r_val(state, z)];
 
-  state.builder.constant_composite(float_vec4, args)
+  state.builder.composite_construct(float_vec4, None, args).unwrap()
 }
 
 pub fn translate_r_val(state: &mut OutputState, expr: &hir::Expr) -> Word {
@@ -544,6 +539,13 @@ pub fn translate_r_val(state: &mut OutputState, expr: &hir::Expr) -> Word {
           }
         _ => panic!(),
       }
+    }
+    hir::ExprKind::DoubleConst(f) => {
+      // XXX: we need to do something better about the types of literals
+      // We could constant pool these things
+      let float = emit_float(state);
+      let b = &mut state.builder;
+      b.constant_f32(float, f as f32)
     }
     _ => panic!()
   }
