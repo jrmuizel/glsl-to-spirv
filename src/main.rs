@@ -47,9 +47,6 @@ void main()
   b.memory_model(spirv::AddressingModel::Logical, spirv::MemoryModel::GLSL450);
 
 
-
-  let mut output = String::new();
-
   let mut state = OutputState { hir: state, indent: 0,
     should_indent: false,
     output_cxx: false,
@@ -61,10 +58,9 @@ void main()
     builder: b,
     emitted_types: HashMap::new(),
     emitted_syms: HashMap::new(),
-
   };
 
-  show_translation_unit(&mut output, &mut state, &hir);
+  translate_translation_unit(&mut state, &hir);
 
   let mut b = state.builder;
 
@@ -1030,7 +1026,7 @@ pub fn translate_type(state: &mut OutputState, ty: &syntax::FullySpecifiedType) 
   emit_void(state)
 }
 
-pub fn show_function_definition<F>(f: &mut F, state: &mut OutputState, fd: &hir::FunctionDefinition) where F: Write {
+pub fn translate_function_definition(state: &mut OutputState, fd: &hir::FunctionDefinition) {
   state.return_type = Some(Box::new(fd.prototype.ty.clone()));
 
 
@@ -1368,17 +1364,17 @@ pub fn show_preprocessor_extension<F>(f: &mut F, pe: &hir::PreprocessorExtension
   let _ = f.write_str("\n");
 }
 
-pub fn show_external_declaration<F>(f: &mut F, state: &mut OutputState, ed: &hir::ExternalDeclaration) where F: Write {
+pub fn translate_external_declaration(state: &mut OutputState, ed: &hir::ExternalDeclaration) {
   match *ed {
-    hir::ExternalDeclaration::Preprocessor(ref pp) => show_preprocessor(f, pp),
-  hir::ExternalDeclaration::FunctionDefinition(ref fd) => show_function_definition(f, state, fd),
-  hir::ExternalDeclaration::Declaration(ref d) => show_declaration(f, state, d)
+    hir::ExternalDeclaration::Preprocessor(ref pp) => panic!("Preprocessor unsupported"),
+  hir::ExternalDeclaration::FunctionDefinition(ref fd) => translate_function_definition(state, fd),
+  hir::ExternalDeclaration::Declaration(ref d) => panic!()
   }
 }
 
-pub fn show_translation_unit<F>(f: &mut F, state: &mut OutputState, tu: &hir::TranslationUnit) where F: Write {
+pub fn translate_translation_unit(state: &mut OutputState, tu: &hir::TranslationUnit) {
   for ed in &(tu.0).0 {
-    show_external_declaration(f, state, ed);
+    translate_external_declaration(state, ed);
   }
 }
 
