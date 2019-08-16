@@ -911,7 +911,7 @@ pub fn show_single_declaration<F>(f: &mut F, state: &mut OutputState, d: &hir::S
 
   if let Some(ref name) = d.name {
     let _ = f.write_str(" ");
-    show_identifier(f, name);
+    show_sym(f, state, name);
   }
 
   if let Some(ref arr_spec) = d.array_specifier {

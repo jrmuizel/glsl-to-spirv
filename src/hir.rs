@@ -83,10 +83,11 @@ impl State {
         return None;
     }
 
-    fn declare(&mut self, name: &str, ty: Type) {
+    fn declare(&mut self, name: &str, ty: Type) -> SymRef {
         let s = SymRef(self.syms.len() as u32);
         self.syms.push(Symbol{ name: name.into(), ty});
         self.scopes.last_mut().unwrap().names.insert(name.into(), s);
+        s
     }
 
     pub fn sym(&self, sym: SymRef) -> &Symbol {
@@ -212,7 +213,7 @@ pub struct InitDeclaratorList {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SingleDeclaration {
     pub ty: FullySpecifiedType,
-    pub name: Option<Identifier>,
+    pub name: Option<SymRef>,
     pub array_specifier: Option<ArraySpecifier>,
     pub initializer: Option<Initializer>
 }
@@ -536,41 +537,6 @@ pub enum Statement {
     Simple(Box<SimpleStatement>)
 }
 
-impl Statement {
-
-    /// Declare a new variable.
-    ///
-    /// `ty` is the type of the variable, `name` the name of the binding to create,
-    /// `array_specifier` an optional argument to make your binding an array and
-    /// `initializer`
-    pub fn declare_var<T, N, A, I>(
-        ty: T,
-        name: N,
-        array_specifier: A,
-        initializer: I
-    ) -> Self
-        where T: Into<FullySpecifiedType>,
-              N: Into<Identifier>,
-              A: Into<Option<ArraySpecifier>>,
-              I: Into<Option<Initializer>> {
-        Statement::Simple(
-            Box::new(SimpleStatement::Declaration(
-                Declaration::InitDeclaratorList(
-                    InitDeclaratorList {
-                        head: SingleDeclaration {
-                            ty: ty.into(),
-                            name: Some(name.into()),
-                            array_specifier: array_specifier.into(),
-                            initializer: initializer.into()
-                        },
-                        tail: Vec::new()
-                    }
-                )
-            ))
-        )
-    }
-}
-
 /// Simple statement.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SimpleStatement {
@@ -802,16 +768,16 @@ fn translate_initializater(state: &mut State, i: &syntax::Initializer) -> Initia
 fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration) -> SingleDeclaration {
     let mut ty = d.ty.clone();
     ty.ty.array_specifier = d.array_specifier.clone();
-    match &ty.ty.ty {
+    let sym = match &ty.ty.ty {
         TypeSpecifierNonArray::Struct(s) => {
-            state.declare(s.name.as_ref().unwrap().as_str(), Type::Struct(ty.clone()));
+            state.declare(s.name.as_ref().unwrap().as_str(), Type::Struct(ty.clone()))
         }
         _ => {
-            state.declare(d.name.as_ref().unwrap().as_str(), Type::Variable(ty.clone()));
+            state.declare(d.name.as_ref().unwrap().as_str(), Type::Variable(ty.clone()))
         }
-    }
+    };
     SingleDeclaration {
-        name: d.name.clone(),
+        name: Some(sym),
         ty,
         array_specifier: d.array_specifier.clone(),
         initializer: d.initializer.as_ref().map(|x| translate_initializater(state, x)),
@@ -1265,7 +1231,7 @@ fn declare_function(state: &mut State, name: &str, ret: Type, params: Vec<Type>)
     let sig = FunctionSignature{ ret: Box::new(ret), params };
     match state.lookup_sym_mut(name) {
         Some(Symbol { ty: Type::Function(f), ..}) => f.signatures.push(sig),
-        None => state.declare(name, Type::Function(FunctionType{ signatures: NonEmpty::new(sig)})),
+        None => { state.declare(name, Type::Function(FunctionType{ signatures: NonEmpty::new(sig)})); },
         _ => panic!("overloaded function name {}", name)
     }
     //state.declare(name, Type::Function(FunctionType{ v}))
