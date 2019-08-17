@@ -1,4 +1,4 @@
-This is a really messy exploration at compiling glsl to spriv.
+This is a really messy exploration into compiling GLSL to SPIRV.
 
 It currently only supports compiling programs of the form:
 ```glsl
