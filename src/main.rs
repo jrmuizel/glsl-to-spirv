@@ -58,9 +58,8 @@ fn main() {
 
 void main()
 {
-    float x = 0.1;
-    x = x + 0.1;
-	gl_FragColor = vec4(x, 0.4, 0.8, 1.0);
+    vec4 p = vec4(1.);
+	gl_FragColor = vec4(0.4, 0.4, 0.8, 1.0) + p;
 }");
 
     /*void main() {
@@ -483,7 +482,11 @@ pub fn emit_type(state: &mut OutputState, ty: &hir::Type) -> Word {
           emit_float(state)
         }
         syntax::TypeSpecifierNonArray::Double => {
+          //XXX: actually use double here
           emit_float(state)
+        }
+        syntax::TypeSpecifierNonArray::Vec4 => {
+          emit_vec4(state)
         }
         _ => panic!("{:?}", t.ty.ty)
       }
@@ -576,6 +579,7 @@ pub fn translate_r_val(state: &mut OutputState, expr: &hir::Expr) -> Word {
               "vec4" => {
                 match args[..] {
                   [ref x, ref y, ref w, ref z] => translate_vec4(state, x, y, w, z),
+                  [ref x] => translate_vec4(state, x, x, x, x),
                   _ => panic!(),
                 }
               }
