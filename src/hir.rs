@@ -7,7 +7,6 @@ use glsl::syntax;
 use glsl::syntax::StructFieldSpecifier;
 use glsl::syntax::PrecisionQualifier;
 use glsl::syntax::ArrayedIdentifier;
-use glsl::syntax::FullySpecifiedType;
 use glsl::syntax::ArraySpecifier;
 use glsl::syntax::TypeName;
 use glsl::syntax::StructSpecifier;
@@ -27,8 +26,8 @@ pub struct Symbol {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionSignature {
-    ret: Box<Type>,
-    params: Vec<Type>,
+    ret: Box<TypeSpecifier>,
+    params: Vec<TypeSpecifier>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,16 +35,54 @@ pub struct FunctionType {
     signatures: NonEmpty<FunctionSignature>
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum StorageClass {
+    None,
+    In,
+    Out,
+    Uniform,
+}
+
+/// Fully specified type.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FullySpecifiedType {
+    pub qualifier: Option<TypeQualifier>,
+    pub ty: TypeSpecifier
+}
+
+impl FullySpecifiedType {
+    pub fn new(ty: TypeSpecifierNonArray) -> Self {
+        FullySpecifiedType {
+            qualifier: None,
+            ty: TypeSpecifier {
+                ty,
+                array_specifier: None
+            }
+        }
+    }
+
+
+}
+
+impl From<syntax::FullySpecifiedType> for FullySpecifiedType {
+    fn from(ty: syntax::FullySpecifiedType) -> Self {
+        FullySpecifiedType {
+            qualifier: ty.qualifier,
+            ty: ty.ty
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Function(FunctionType),
-    Variable(FullySpecifiedType),
+    Variable(StorageClass, FullySpecifiedType),
     Struct(FullySpecifiedType)
 }
 
 impl Type {
     fn var(t: TypeSpecifierNonArray) -> Self {
-        Type::Variable(FullySpecifiedType::new(t))
+        Type::Variable(StorageClass::None, FullySpecifiedType::new(t))
     }
 }
 
@@ -217,7 +254,7 @@ impl From<Expr> for Initializer {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Expr {
     pub kind: ExprKind,
-    pub ty: Type
+    pub ty: TypeSpecifier
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -746,15 +783,35 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
     ty.ty.array_specifier = d.array_specifier.clone();
     let sym = match &ty.ty.ty {
         TypeSpecifierNonArray::Struct(s) => {
-            state.declare(s.name.as_ref().unwrap().as_str(), Type::Struct(ty.clone()))
+            state.declare(s.name.as_ref().unwrap().as_str(), Type::Struct(ty.clone().into()))
         }
         _ => {
-            state.declare(d.name.as_ref().unwrap().as_str(), Type::Variable(ty.clone()))
+            let mut storage = StorageClass::None;
+            for qual in ty.qualifier.iter().flat_map(|x| x.qualifiers.0.iter()) {
+                match qual {
+                    syntax::TypeQualifierSpec::Storage(s) => {
+                        match (&storage, s) {
+                            (StorageClass::None, syntax::StorageQualifier::Out) => {
+                                storage = StorageClass::Out
+                            }
+                            (StorageClass::None, syntax::StorageQualifier::In) => {
+                                storage = StorageClass::In
+                            }
+                            (StorageClass::None, syntax::StorageQualifier::Uniform) => {
+                                storage = StorageClass::Uniform
+                            }
+                            _ => panic!("bad storage {:?}", (storage, s))
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            state.declare(d.name.as_ref().unwrap().as_str(), Type::Variable(storage, ty.clone().into()))
         }
     };
     SingleDeclaration {
-        name: Some(sym),
-        ty,
+        name: d.name.as_ref().and(Some(sym)),
+        ty: ty.into(),
         array_specifier: d.array_specifier.clone(),
         initializer: d.initializer.as_ref().map(|x| translate_initializater(state, x)),
     }
@@ -781,59 +838,44 @@ fn translate_declaration(state: &mut State, d: &syntax::Declaration) -> Declarat
     }
 }
 
-fn is_vector(ty: &Type) -> bool {
-    match ty {
-        Type::Variable(FullySpecifiedType { ty, .. }) => {
-            match ty.ty {
-                TypeSpecifierNonArray::Vec3 | TypeSpecifierNonArray::Vec2 | TypeSpecifierNonArray::Vec4 => {
-                    true
-                }
-                _ => false
-            }
+fn is_vector(ty: &TypeSpecifier) -> bool {
+    match ty.ty {
+        TypeSpecifierNonArray::Vec3 | TypeSpecifierNonArray::Vec2 | TypeSpecifierNonArray::Vec4 => {
+            true
         }
         _ => false
     }
 }
 
-fn compatible_type(lhs: &Type, rhs: &Type) -> bool {
-    if lhs == &Type::Variable(FullySpecifiedType::new(TypeSpecifierNonArray::Double)) &&
-        rhs == &Type::Variable(FullySpecifiedType::new(TypeSpecifierNonArray::Float)) {
+fn compatible_type(lhs: &TypeSpecifier, rhs: &TypeSpecifier) -> bool {
+    if lhs == &TypeSpecifier::new(TypeSpecifierNonArray::Double) &&
+        rhs == &TypeSpecifier::new(TypeSpecifierNonArray::Float) {
         true
-    } else if rhs == &Type::Variable(FullySpecifiedType::new(TypeSpecifierNonArray::Double)) &&
-        lhs == &Type::Variable(FullySpecifiedType::new(TypeSpecifierNonArray::Float)) {
+    } else if rhs == &TypeSpecifier::new(TypeSpecifierNonArray::Double) &&
+        lhs == &TypeSpecifier::new(TypeSpecifierNonArray::Float) {
         true
     } else {
-        match (lhs, rhs) {
-            (Type::Variable(lhs), Type::Variable(rhs)) => {
-                lhs.ty == rhs.ty
-            }
-            _ => panic!("unexpected type")
-        }
+        lhs == rhs
     }
 }
 
-fn promoted_type(lhs: &Type, rhs: &Type) -> Type {
-    if lhs == &Type::var(TypeSpecifierNonArray::Double) &&
-        rhs == &Type::var(TypeSpecifierNonArray::Float) {
-        Type::var(TypeSpecifierNonArray::Double)
-    } else if lhs == &Type::var(TypeSpecifierNonArray::Float) &&
-        rhs == &Type::var(TypeSpecifierNonArray::Double) {
-        Type::var(TypeSpecifierNonArray::Double)
-    } else if is_vector(&lhs) && (rhs == &Type::var(TypeSpecifierNonArray::Float) ||
-        rhs == &Type::var(TypeSpecifierNonArray::Double)) {
+fn promoted_type(lhs: &TypeSpecifier, rhs: &TypeSpecifier) -> TypeSpecifier {
+    if lhs == &TypeSpecifier::new(TypeSpecifierNonArray::Double) &&
+        rhs == &TypeSpecifier::new(TypeSpecifierNonArray::Float) {
+        TypeSpecifier::new(TypeSpecifierNonArray::Double)
+    } else if lhs == &TypeSpecifier::new(TypeSpecifierNonArray::Float) &&
+        rhs == &TypeSpecifier::new(TypeSpecifierNonArray::Double) {
+        TypeSpecifier::new(TypeSpecifierNonArray::Double)
+    } else if is_vector(&lhs) && (rhs == &TypeSpecifier::new(TypeSpecifierNonArray::Float) ||
+        rhs == &TypeSpecifier::new(TypeSpecifierNonArray::Double)) {
         // scalars promote to vectors
         lhs.clone()
-    } else if is_vector(&rhs) && (lhs == &Type::var(TypeSpecifierNonArray::Float) ||
-        lhs == &Type::var(TypeSpecifierNonArray::Double)) {
+    } else if is_vector(&rhs) && (lhs == &TypeSpecifier::new(TypeSpecifierNonArray::Float) ||
+        lhs == &TypeSpecifier::new(TypeSpecifierNonArray::Double)) {
         // scalars promote to vectors
         rhs.clone()
     } else {
-        match (lhs, rhs) {
-            (Type::Variable(lhs), Type::Variable(rhs)) => {
-                assert_eq!(lhs.ty, rhs.ty)
-            }
-            _ => panic!("unexpected types {:?} {:?}", lhs, rhs)
-        }
+        assert_eq!(lhs, rhs);
         lhs.clone()
     }
 }
@@ -845,7 +887,11 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                 Some(sym) => sym,
                 None => panic!("missing declaration {}", i.as_str())
             };
-            Expr { kind: ExprKind::Variable(sym), ty: state.sym(sym).ty.clone() }
+            let ty = match &state.sym(sym).ty {
+                Type::Variable(_, ty) => ty.ty.clone(),
+                _ => panic!("bad variable type")
+            };
+            Expr { kind: ExprKind::Variable(sym), ty }
         },
         syntax::Expr::Assignment(lhs, op, rhs) => {
             let lhs = Box::new(translate_expression(state, lhs));
@@ -858,16 +904,10 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             let lhs = Box::new(translate_expression(state, lhs));
             let rhs = Box::new(translate_expression(state, rhs));
             let ty = if op == &BinaryOp::Mult {
-                match (&lhs.ty, &rhs.ty) {
-                    (Type::Variable(FullySpecifiedType { ty: ilhs, ..}),
-                     Type::Variable(FullySpecifiedType { ty: irhs, ..})) => {
-                        if ilhs.ty == TypeSpecifierNonArray::Mat3 && irhs.ty == TypeSpecifierNonArray::Vec3 {
-                            rhs.ty.clone()
-                        } else {
-                            promoted_type(&lhs.ty, &rhs.ty)
-                        }
-                    }
-                    _ => promoted_type(&lhs.ty, &rhs.ty)
+                if lhs.ty.ty == TypeSpecifierNonArray::Mat3 && rhs.ty.ty == TypeSpecifierNonArray::Vec3 {
+                    rhs.ty.clone()
+                } else {
+                    promoted_type(&lhs.ty, &rhs.ty)
                 }
             } else {
                 promoted_type(&lhs.ty, &rhs.ty)
@@ -880,7 +920,7 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             Expr { kind: ExprKind::Unary(op.clone(), e), ty}
         }
         syntax::Expr::BoolConst(b) => {
-            Expr { kind: ExprKind::BoolConst(*b), ty: Type::Variable(FullySpecifiedType::new(TypeSpecifierNonArray::Bool)) }
+            Expr { kind: ExprKind::BoolConst(*b), ty: TypeSpecifier::new(TypeSpecifierNonArray::Bool) }
         }
         syntax::Expr::Comma(lhs, rhs) => {
             let lhs = Box::new(translate_expression(state, lhs));
@@ -890,13 +930,13 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             Expr { kind: ExprKind::Comma(lhs, rhs), ty }
         }
         syntax::Expr::DoubleConst(d) => {
-            Expr { kind: ExprKind::DoubleConst(*d), ty: Type::Variable(FullySpecifiedType::new(TypeSpecifierNonArray::Double)) }
+            Expr { kind: ExprKind::DoubleConst(*d), ty: TypeSpecifier::new(TypeSpecifierNonArray::Double) }
         }
         syntax::Expr::FloatConst(f) => {
-            Expr { kind: ExprKind::FloatConst(*f), ty: Type::Variable(FullySpecifiedType::new(TypeSpecifierNonArray::Float)) }
+            Expr { kind: ExprKind::FloatConst(*f), ty: TypeSpecifier::new(TypeSpecifierNonArray::Float) }
         },
         syntax::Expr::FunCall(fun, params) => {
-            let ret_ty: Type;
+            let ret_ty: TypeSpecifier;
             let params: Vec<Expr> = params.iter().map(|x| translate_expression(state, x)).collect();
             Expr {
                 kind:
@@ -933,7 +973,7 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                                     };
                                 },
                                 Type::Struct(t) => {
-                                    ret_ty = Type::Variable(t.clone())
+                                    ret_ty = t.ty.clone()
                                 }
                                 _ => panic!("can only call functions")
                             };
@@ -948,10 +988,10 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             }
         }
         syntax::Expr::IntConst(i) => {
-            Expr { kind: ExprKind::IntConst(*i), ty: Type::Variable(FullySpecifiedType::new(TypeSpecifierNonArray::Int)) }
+            Expr { kind: ExprKind::IntConst(*i), ty: TypeSpecifier::new(TypeSpecifierNonArray::Int) }
         }
         syntax::Expr::UIntConst(u) => {
-            Expr { kind: ExprKind::UIntConst(*u), ty: Type::Variable(FullySpecifiedType::new(TypeSpecifierNonArray::UInt)) }
+            Expr { kind: ExprKind::UIntConst(*u), ty: TypeSpecifier::new(TypeSpecifierNonArray::UInt) }
         }
         syntax::Expr::PostDec(e) => {
             let e = Box::new(translate_expression(state, e));
@@ -975,13 +1015,13 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             let e = Box::new(translate_expression(state, e));
             let ty = e.ty.clone();
             if is_vector(&ty) {
-                let ty = Type::Variable(FullySpecifiedType::new(match i.as_str().len() {
+                let ty = TypeSpecifier::new(match i.as_str().len() {
                     1 => TypeSpecifierNonArray::Float,
                     2 => TypeSpecifierNonArray::Vec2,
                     3 => TypeSpecifierNonArray::Vec3,
                     4 => TypeSpecifierNonArray::Vec4,
                     _ => panic!(),
-                }));
+                });
 
                 Expr { kind: ExprKind::SwizzleSelector(e, SwizzleSelector::parse(i.as_str())), ty }
             } else {
@@ -992,16 +1032,10 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
         syntax::Expr::Bracket(e, specifier) =>{
             let e = Box::new(translate_expression(state, e));
             let ty = if is_vector(&e.ty) {
-                Type::var(TypeSpecifierNonArray::Float)
+                TypeSpecifier::new(TypeSpecifierNonArray::Float)
             } else {
-                match &e.ty {
-                    Type::Variable(f) => {
-                        assert!(f.ty.array_specifier.is_some());
-                        e.ty.clone()
-                    }
-                    _ => panic!("non vector array {:?} {:?}", state.sym(SymRef(17)), e)
-
-                }
+                assert!(e.ty.array_specifier.is_some());
+                e.ty.clone()
             };
             Expr { kind: ExprKind::Bracket(e, specifier.clone()), ty }
         }
@@ -1151,6 +1185,7 @@ fn translate_function_parameter_declaration(state: &mut State, p: &syntax::Funct
     match p {
         syntax::FunctionParameterDeclaration::Named(qual, p) => {
             state.declare(p.ident.ident.as_str(), Type::Variable(
+                StorageClass::None,
                 FullySpecifiedType {
                     qualifier: None,
                     ty: TypeSpecifier {
@@ -1169,7 +1204,7 @@ fn translate_function_parameter_declaration(state: &mut State, p: &syntax::Funct
 
 fn translate_prototype(state: &mut State, cs: &syntax::FunctionPrototype) -> FunctionPrototype {
     FunctionPrototype {
-        ty: cs.ty.clone(),
+        ty: cs.ty.clone().into(),
         name: cs.name.clone(),
         parameters: cs.parameters.iter().map(|x| translate_function_parameter_declaration(state, x)).collect(),
     }
@@ -1178,10 +1213,10 @@ fn translate_prototype(state: &mut State, cs: &syntax::FunctionPrototype) -> Fun
 fn translate_function_definition(state: &mut State, fd: &syntax::FunctionDefinition) -> FunctionDefinition {
     let prototype = translate_prototype(state, &fd.prototype);
     let params = prototype.parameters.iter().map(|p| match p {
-        FunctionParameterDeclaration::Named(_, p) => Type::var(p.ty.ty.clone()),
-        FunctionParameterDeclaration::Unnamed(_, p) => Type::var(p.ty.clone()),
+        FunctionParameterDeclaration::Named(_, p) => p.ty.clone(),
+        FunctionParameterDeclaration::Unnamed(_, p) => p.clone(),
     }).collect();
-    let sig = FunctionSignature{ ret: Box::new(Type::Variable(prototype.ty.clone())), params };
+    let sig = FunctionSignature{ ret: Box::new(prototype.ty.ty.clone()), params };
     state.declare(fd.prototype.name.as_str(), Type::Function(FunctionType{ signatures: NonEmpty::new(sig)}));
     state.push_scope(fd.prototype.name.as_str().into());
     let f = FunctionDefinition {
@@ -1203,7 +1238,7 @@ fn translate_external_declaration(state: &mut State, ed: &syntax::ExternalDeclar
     }
 }
 
-fn declare_function(state: &mut State, name: &str, ret: Type, params: Vec<Type>) {
+fn declare_function(state: &mut State, name: &str, ret: TypeSpecifier, params: Vec<TypeSpecifier>) {
     let sig = FunctionSignature{ ret: Box::new(ret), params };
     match state.lookup_sym_mut(name) {
         Some(Symbol { ty: Type::Function(f), ..}) => f.signatures.push(sig),
@@ -1218,65 +1253,65 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
     // global scope
     state.push_scope("global".into());
     use TypeSpecifierNonArray::*;
-    declare_function(state, "vec3", Type::var(Vec3),
-                     vec![Type::var(Float), Type::var(Float), Type::var(Float)]);
-    declare_function(state, "vec3", Type::var(Vec3),
-                     vec![Type::var(Float)]);
-    declare_function(state, "vec3", Type::var(Vec3),
-                     vec![Type::var(Vec2), Type::var(Float)]);
-    declare_function(state, "vec4", Type::var(Vec4),
-                     vec![Type::var(Vec3), Type::var(Float)]);
-    declare_function(state, "vec4", Type::var(Vec4),
-                     vec![Type::var(Float), Type::var(Float), Type::var(Float), Type::var(Float)]);
-    declare_function(state, "vec2", Type::var(Vec2),
-                     vec![Type::var(Float)]);
-    declare_function(state, "mix", Type::var(Vec3),
-                     vec![Type::var(Vec3), Type::var(Vec3), Type::var(Vec3)]);
-    declare_function(state, "mix", Type::var(Vec3),
-                     vec![Type::var(Vec3), Type::var(Vec3), Type::var(Float)]);
-    declare_function(state, "mix", Type::var(Float),
-                     vec![Type::var(Float), Type::var(Float), Type::var(Float)]);
-    declare_function(state, "step", Type::var(Vec2),
-                     vec![Type::var(Vec2), Type::var(Vec2)]);
-    declare_function(state, "max", Type::var(Vec2),
-                     vec![Type::var(Vec2), Type::var(Vec2)]);
-    declare_function(state, "max", Type::var(Float),
-                     vec![Type::var(Float), Type::var(Float)]);
-    declare_function(state, "min", Type::var(Float),
-                     vec![Type::var(Float), Type::var(Float)]);
-    declare_function(state, "fwidth", Type::var(Vec2),
-                     vec![Type::var(Vec2)]);
-    declare_function(state, "clamp", Type::var(Vec3),
-                     vec![Type::var(Vec3), Type::var(Float), Type::var(Float)]);
-    declare_function(state, "clamp", Type::var(Double),
-                     vec![Type::var(Double), Type::var(Double), Type::var(Double)]);
-    declare_function(state, "clamp", Type::var(Vec3),
-                     vec![Type::var(Vec3), Type::var(Vec3), Type::var(Vec3)]);
-    declare_function(state, "length", Type::var(Float), vec![Type::var(Vec2)]);
-    declare_function(state, "pow", Type::var(Vec3), vec![Type::var(Vec3)]);
-    declare_function(state, "pow", Type::var(Float), vec![Type::var(Float)]);
-    declare_function(state, "lessThanEqual", Type::var(BVec3),
-                     vec![Type::var(Vec3), Type::var(Vec3)]);
-    declare_function(state, "if_then_else", Type::var(Vec3),
-                     vec![Type::var(BVec3), Type::var(Vec3), Type::var(Vec3)]);
-    declare_function(state, "floor", Type::var(Vec4),
-                     vec![Type::var(Vec4)]);
-    declare_function(state, "floor", Type::var(Double),
-                     vec![Type::var(Double)]);
-    declare_function(state, "int", Type::var(Int),
-                     vec![Type::var(Float)]);
-    declare_function(state, "uint", Type::var(UInt),
-                     vec![Type::var(Float)]);
-    declare_function(state, "uint", Type::var(UInt),
-                     vec![Type::var(Int)]);
-    declare_function(state, "ivec2", Type::var(IVec2),
-                     vec![Type::var(UInt), Type::var(UInt)]);
-    declare_function(state, "ivec2", Type::var(IVec2),
-                     vec![Type::var(UInt), Type::var(UInt)]);
-    declare_function(state, "texelFetch", Type::var(Vec4),
-                     vec![Type::var(Sampler2D), Type::var(IVec2), Type::var(Int)]);
-    declare_function(state, "texture", Type::var(Vec4),
-                     vec![Type::var(Sampler2D), Type::var(Vec3)]);
+    declare_function(state, "vec3", TypeSpecifier::new(Vec3),
+                     vec![TypeSpecifier::new(Float), TypeSpecifier::new(Float), TypeSpecifier::new(Float)]);
+    declare_function(state, "vec3", TypeSpecifier::new(Vec3),
+                     vec![TypeSpecifier::new(Float)]);
+    declare_function(state, "vec3", TypeSpecifier::new(Vec3),
+                     vec![TypeSpecifier::new(Vec2), TypeSpecifier::new(Float)]);
+    declare_function(state, "vec4", TypeSpecifier::new(Vec4),
+                     vec![TypeSpecifier::new(Vec3), TypeSpecifier::new(Float)]);
+    declare_function(state, "vec4", TypeSpecifier::new(Vec4),
+                     vec![TypeSpecifier::new(Float), TypeSpecifier::new(Float), TypeSpecifier::new(Float), TypeSpecifier::new(Float)]);
+    declare_function(state, "vec2", TypeSpecifier::new(Vec2),
+                     vec![TypeSpecifier::new(Float)]);
+    declare_function(state, "mix", TypeSpecifier::new(Vec3),
+                     vec![TypeSpecifier::new(Vec3), TypeSpecifier::new(Vec3), TypeSpecifier::new(Vec3)]);
+    declare_function(state, "mix", TypeSpecifier::new(Vec3),
+                     vec![TypeSpecifier::new(Vec3), TypeSpecifier::new(Vec3), TypeSpecifier::new(Float)]);
+    declare_function(state, "mix", TypeSpecifier::new(Float),
+                     vec![TypeSpecifier::new(Float), TypeSpecifier::new(Float), TypeSpecifier::new(Float)]);
+    declare_function(state, "step", TypeSpecifier::new(Vec2),
+                     vec![TypeSpecifier::new(Vec2), TypeSpecifier::new(Vec2)]);
+    declare_function(state, "max", TypeSpecifier::new(Vec2),
+                     vec![TypeSpecifier::new(Vec2), TypeSpecifier::new(Vec2)]);
+    declare_function(state, "max", TypeSpecifier::new(Float),
+                     vec![TypeSpecifier::new(Float), TypeSpecifier::new(Float)]);
+    declare_function(state, "min", TypeSpecifier::new(Float),
+                     vec![TypeSpecifier::new(Float), TypeSpecifier::new(Float)]);
+    declare_function(state, "fwidth", TypeSpecifier::new(Vec2),
+                     vec![TypeSpecifier::new(Vec2)]);
+    declare_function(state, "clamp", TypeSpecifier::new(Vec3),
+                     vec![TypeSpecifier::new(Vec3), TypeSpecifier::new(Float), TypeSpecifier::new(Float)]);
+    declare_function(state, "clamp", TypeSpecifier::new(Double),
+                     vec![TypeSpecifier::new(Double), TypeSpecifier::new(Double), TypeSpecifier::new(Double)]);
+    declare_function(state, "clamp", TypeSpecifier::new(Vec3),
+                     vec![TypeSpecifier::new(Vec3), TypeSpecifier::new(Vec3), TypeSpecifier::new(Vec3)]);
+    declare_function(state, "length", TypeSpecifier::new(Float), vec![TypeSpecifier::new(Vec2)]);
+    declare_function(state, "pow", TypeSpecifier::new(Vec3), vec![TypeSpecifier::new(Vec3)]);
+    declare_function(state, "pow", TypeSpecifier::new(Float), vec![TypeSpecifier::new(Float)]);
+    declare_function(state, "lessThanEqual", TypeSpecifier::new(BVec3),
+                     vec![TypeSpecifier::new(Vec3), TypeSpecifier::new(Vec3)]);
+    declare_function(state, "if_then_else", TypeSpecifier::new(Vec3),
+                     vec![TypeSpecifier::new(BVec3), TypeSpecifier::new(Vec3), TypeSpecifier::new(Vec3)]);
+    declare_function(state, "floor", TypeSpecifier::new(Vec4),
+                     vec![TypeSpecifier::new(Vec4)]);
+    declare_function(state, "floor", TypeSpecifier::new(Double),
+                     vec![TypeSpecifier::new(Double)]);
+    declare_function(state, "int", TypeSpecifier::new(Int),
+                     vec![TypeSpecifier::new(Float)]);
+    declare_function(state, "uint", TypeSpecifier::new(UInt),
+                     vec![TypeSpecifier::new(Float)]);
+    declare_function(state, "uint", TypeSpecifier::new(UInt),
+                     vec![TypeSpecifier::new(Int)]);
+    declare_function(state, "ivec2", TypeSpecifier::new(IVec2),
+                     vec![TypeSpecifier::new(UInt), TypeSpecifier::new(UInt)]);
+    declare_function(state, "ivec2", TypeSpecifier::new(IVec2),
+                     vec![TypeSpecifier::new(UInt), TypeSpecifier::new(UInt)]);
+    declare_function(state, "texelFetch", TypeSpecifier::new(Vec4),
+                     vec![TypeSpecifier::new(Sampler2D), TypeSpecifier::new(IVec2), TypeSpecifier::new(Int)]);
+    declare_function(state, "texture", TypeSpecifier::new(Vec4),
+                     vec![TypeSpecifier::new(Sampler2D), TypeSpecifier::new(Vec3)]);
     state.declare("gl_FragCoord", Type::var(Vec4));
     state.declare("gl_FragColor", Type::var(Vec4));
 

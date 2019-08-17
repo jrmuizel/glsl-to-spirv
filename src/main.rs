@@ -15,6 +15,7 @@ use std::collections::HashMap;
 mod hir;
 
 use hir::State;
+use hir::FullySpecifiedType;
 
 pub fn glsl_to_spirv(input: &str) -> String {
   let ast = TranslationUnit::parse(input).unwrap();
@@ -53,12 +54,10 @@ pub fn glsl_to_spirv(input: &str) -> String {
 }
 
 fn main() {
-  let r = TranslationUnit::parse("
+  let r = TranslationUnit::parse("layout(location = 0) out vec4 outColor;
 
-void main()
-{
-    vec4 p = vec4(1.);
-	gl_FragColor = vec4(0.4, 0.4, 0.8, 1.0) + p;
+void main() {
+    outColor = vec4(1.0, 0.0, 0.0, 1.0);
 }");
 
     /*void main() {
@@ -115,7 +114,7 @@ pub struct Variable {
 pub struct OutputState {
   builder: rspirv::mr::Builder,
   hir: hir::State,
-  return_type: Option<Box<syntax::FullySpecifiedType>>,
+  return_type: Option<Box<hir::FullySpecifiedType>>,
   return_declared: bool,
   //XXX: we can probably hash on something better than String
   emitted_types: HashMap<String, Word>,
@@ -267,7 +266,7 @@ pub fn show_type_specifier<F>(f: &mut F, state: &mut OutputState, t: &syntax::Ty
   }
 }
 
-pub fn show_fully_specified_type<F>(f: &mut F, state: &mut OutputState, t: &syntax::FullySpecifiedType) where F: Write {
+pub fn show_fully_specified_type<F>(f: &mut F, state: &mut OutputState, t: &FullySpecifiedType) where F: Write {
   if let Some(ref qual) = t.qualifier {
     show_type_qualifier(f, &qual);
     let _ = f.write_str(" ");
@@ -473,24 +472,19 @@ pub fn emit_float(state: &mut OutputState) -> Word {
   }
 }
 
-pub fn emit_type(state: &mut OutputState, ty: &hir::Type) -> Word {
-  match ty {
-    hir::Type::Variable(t) => {
-      match t.ty.ty {
-        syntax::TypeSpecifierNonArray::Float => {
-          emit_float(state)
-        }
-        syntax::TypeSpecifierNonArray::Double => {
-          //XXX: actually use double here
-          emit_float(state)
-        }
-        syntax::TypeSpecifierNonArray::Vec4 => {
-          emit_vec4(state)
-        }
-        _ => panic!("{:?}", t.ty.ty)
-      }
+pub fn emit_type(state: &mut OutputState, ty: &syntax::TypeSpecifier) -> Word {
+  match ty.ty {
+    syntax::TypeSpecifierNonArray::Float => {
+      emit_float(state)
     }
-    _ => panic!()
+    syntax::TypeSpecifierNonArray::Double => {
+      //XXX: actually use double here
+      emit_float(state)
+    }
+    syntax::TypeSpecifierNonArray::Vec4 => {
+      emit_vec4(state)
+    }
+    _ => panic!("{:?}", ty.ty)
   }
 }
 
@@ -971,7 +965,14 @@ pub fn translate_initializer(state: &mut OutputState, i: &hir::Initializer) -> W
 
 pub fn translate_single_declaration(state: &mut OutputState, d: &hir::SingleDeclaration) {
 
-  let ty = emit_float(state);
+  let ty = emit_type(state, &d.ty.ty);
+ /* match d.ty.qualifier {
+    Some(q) => {
+      match q.qualifiers.0.iter().flat_map(|q| match q {
+        syntax::TypeQualifierSpec::Storage(syntax::StorageQualifier::Out) => spirv::StorageClass::Output,
+      _ => spirv::StorageClass::Function
+    }).next().is_some();
+*/
   let output_var = state.builder.variable(ty, None, spirv::StorageClass::Function, None);
   state.emitted_syms.insert(d.name.unwrap(),  Variable{ location: output_var, ty });
 
@@ -1053,7 +1054,7 @@ pub fn show_block<F>(f: &mut F, state: &mut OutputState, b: &hir::Block) where F
   }
 }
 
-pub fn translate_type(state: &mut OutputState, ty: &syntax::FullySpecifiedType) -> spirv::Word {
+pub fn translate_type(state: &mut OutputState, ty: &hir::FullySpecifiedType) -> spirv::Word {
   emit_void(state)
 }
 
@@ -1281,7 +1282,7 @@ pub fn translate_external_declaration(state: &mut OutputState, ed: &hir::Externa
   match *ed {
     hir::ExternalDeclaration::Preprocessor(ref pp) => panic!("Preprocessor unsupported"),
     hir::ExternalDeclaration::FunctionDefinition(ref fd) => translate_function_definition(state, fd),
-    hir::ExternalDeclaration::Declaration(ref d) => panic!()
+    hir::ExternalDeclaration::Declaration(ref d) => translate_declaration(state, d),
   }
 }
 
@@ -1331,4 +1332,51 @@ OpStore %6 %10
 OpStore %13 %18
 OpReturn
 OpFunctionEnd"#)
+}
+
+
+#[test]
+fn vec_addition() {
+  let s= glsl_to_spirv("void main() {
+    vec4 p = vec4(1.);
+	gl_FragColor = vec4(0.4, 0.4, 0.8, 1.0) + p;
+}");
+  let reference = r#"; SPIR-V
+; Version: 1.3
+; Generator: rspirv
+; Bound: 22
+OpMemoryModel Logical GLSL450
+OpEntryPoint Vertex %3 "main"
+OpDecorate %14 Location 0
+%1 = OpTypeVoid
+%2 = OpTypeFunction %1 %1
+%5 = OpTypeFloat 32
+%6 = OpTypeVector %5 4
+%8 = OpConstant  %5  1.0
+%9 = OpConstant  %5  1.0
+%10 = OpConstant  %5  1.0
+%11 = OpConstant  %5  1.0
+%13 = OpTypePointer Output %6
+%15 = OpConstant  %5  0.4
+%16 = OpConstant  %5  0.4
+%17 = OpConstant  %5  1.0
+%18 = OpConstant  %5  0.8
+%3 = OpFunction  %1  DontInline|Const %2
+%4 = OpLabel
+%7 = OpVariable  %6  Function
+%12 = OpCompositeConstruct  %6  %8 %9 %10 %11
+OpStore %7 %12
+%14 = OpVariable  %13  Output
+%19 = OpCompositeConstruct  %6  %15 %16 %17 %18
+%20 = OpLoad  %6  %7
+%21 = OpFAdd  %6  %19 %20
+OpStore %14 %21
+OpReturn
+OpFunctionEnd"#;
+
+  if s != reference {
+    println!("{}", s);
+    println!("{}", reference);
+    panic!()
+  }
 }
