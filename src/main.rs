@@ -22,6 +22,7 @@ fn main() {
 void main()
 {
     float x = 0.1;
+    x = x + 0.1;
 	gl_FragColor = vec4(x, 0.4, 0.8, 1.0);
 }");
 
@@ -466,15 +467,29 @@ pub fn emit_void(state: &mut OutputState) -> Word {
   }
 }
 
-pub fn translate_lvalue_expr(state: &mut OutputState, expr: &hir::Expr) -> Word {
-  match expr.kind {
-    hir::ExprKind::Variable(ref i) => {
+pub fn emit_sym(state: &mut OutputState, s: hir::SymRef) -> Word {
+  let name = &state.hir.sym(s).name;
+  match name.as_ref() {
+    "gl_FragColor" => {
+      // XXX: we emit these special variables lazily
+      // we should do better than matching by name
       let float_vec4 = emit_vec4(state);
       let b = &mut state.builder;
       let output = b.type_pointer(None, spirv::StorageClass::Output, float_vec4);
       let output_var = b.variable(output, None, spirv::StorageClass::Output, None);
       b.decorate(output_var, spirv::Decoration::Location, [Operand::LiteralInt32(0)]);
       output_var
+    }
+    _ => {
+      state.emitted_syms[&s].location
+    }
+  }
+}
+
+pub fn translate_lvalue_expr(state: &mut OutputState, expr: &hir::Expr) -> Word {
+  match expr.kind {
+    hir::ExprKind::Variable(s) => {
+      emit_sym(state, s)
     }
     _ => panic!()
   }
@@ -529,7 +544,19 @@ pub fn translate_r_val(state: &mut OutputState, expr: &hir::Expr) -> Word {
       let v = &state.emitted_syms[&sym];
       state.builder.load(v.ty, None, v.location, None, []).unwrap()
     }
-    _ => panic!()
+    hir::ExprKind::Binary(ref op, ref l, ref r) => {
+      let l = translate_r_val(state, l);
+      let r = translate_r_val(state, r);
+      match op {
+        syntax::BinaryOp::Add => {
+
+        }
+        _ => panic!("Unhandled op {:?}", op)
+      }
+      let float = emit_float(state);
+      state.builder.fadd(float, None, l, r).unwrap()
+    }
+    _ => panic!("Unhandled {:?}", expr)
   }
 }
 
