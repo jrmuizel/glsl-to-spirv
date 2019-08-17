@@ -48,8 +48,6 @@ void main()
 
 
   let mut state = OutputState { hir: state,
-    in_loop_declaration: false,
-    mask: None,
     return_type: None,
     return_declared: false,
     flat: false,
@@ -86,8 +84,6 @@ pub struct Variable {
 pub struct OutputState {
   builder: rspirv::mr::Builder,
   hir: hir::State,
-  in_loop_declaration: bool,
-  mask: Option<Box<hir::Expr>>,
   return_type: Option<Box<syntax::FullySpecifiedType>>,
   return_declared: bool,
   flat: bool,
@@ -1171,10 +1167,7 @@ pub fn show_for_init_statement<F>(f: &mut F, state: &mut OutputState, i: &hir::F
       }
     }
     hir::ForInitStatement::Declaration(ref d) => {
-      state.in_loop_declaration = true;
       show_declaration(f, state, d);
-      state.in_loop_declaration = false;
-
     }
   }
 }
