@@ -17,6 +17,42 @@ mod hir;
 
 use hir::State;
 
+fn glsl_to_spirv(input: &str) -> String {
+  let ast = TranslationUnit::parse(input).unwrap();
+  let mut state = hir::State::new();
+  let hir = hir::ast_to_hir(&mut state, &ast);
+  let mut b = rspirv::mr::Builder::new();
+  b.memory_model(spirv::AddressingModel::Logical, spirv::MemoryModel::GLSL450);
+
+
+  let mut state = OutputState { hir: state,
+    return_type: None,
+    return_declared: false,
+    builder: b,
+    emitted_types: HashMap::new(),
+    emitted_syms: HashMap::new(),
+  };
+
+  translate_translation_unit(&mut state, &hir);
+
+  let mut b = state.builder;
+
+  let module = b.module();
+
+  // Assembling
+  let code = module.assemble();
+  assert!(code.len() > 20);  // Module header contains 5 words
+  assert_eq!(spirv::MAGIC_NUMBER, code[0]);
+
+  // Parsing
+  let mut loader = rspirv::mr::Loader::new();
+  rspirv::binary::parse_words(&code, &mut loader).unwrap();
+  let module = loader.module();
+
+  // Disassembling
+  module.disassemble()
+}
+
 fn main() {
   let r = TranslationUnit::parse("
 
@@ -446,7 +482,10 @@ pub fn emit_type(state: &mut OutputState, ty: &hir::Type) -> Word {
         syntax::TypeSpecifierNonArray::Float => {
           emit_float(state)
         }
-        _ => panic!()
+        syntax::TypeSpecifierNonArray::Double => {
+          emit_float(state)
+        }
+        _ => panic!("{:?}", t.ty.ty)
       }
     }
     _ => panic!()
@@ -1250,3 +1289,44 @@ pub fn translate_translation_unit(state: &mut OutputState, tu: &hir::Translation
   }
 }
 
+#[test]
+fn basic() {
+  let s= glsl_to_spirv("
+
+void main()
+{
+    float x = 0.1;
+    x = x + 0.1;
+	gl_FragColor = vec4(x, 0.4, 0.8, 1.0);
+}");
+  assert_eq!(s, r#"; SPIR-V
+; Version: 1.3
+; Generator: rspirv
+; Bound: 19
+OpMemoryModel Logical GLSL450
+OpEntryPoint Vertex %3 "main"
+OpDecorate %13 Location 0
+%1 = OpTypeVoid
+%2 = OpTypeFunction %1 %1
+%5 = OpTypeFloat 32
+%7 = OpConstant  %5  0.1
+%9 = OpConstant  %5  0.1
+%11 = OpTypeVector %5 4
+%12 = OpTypePointer Output %11
+%15 = OpConstant  %5  0.4
+%16 = OpConstant  %5  1.0
+%17 = OpConstant  %5  0.8
+%3 = OpFunction  %1  DontInline|Const %2
+%4 = OpLabel
+%6 = OpVariable  %5  Function
+OpStore %6 %7
+%8 = OpLoad  %5  %6
+%10 = OpFAdd  %5  %8 %9
+OpStore %6 %10
+%13 = OpVariable  %12  Output
+%14 = OpLoad  %5  %6
+%18 = OpCompositeConstruct  %11  %14 %15 %16 %17
+OpStore %13 %18
+OpReturn
+OpFunctionEnd"#)
+}
