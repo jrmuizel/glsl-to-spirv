@@ -442,6 +442,20 @@ pub fn emit_float(state: &mut OutputState) -> Word {
   }
 }
 
+pub fn emit_type(state: &mut OutputState, ty: &hir::Type) -> Word {
+  match ty {
+    hir::Type::Variable(t) => {
+      match t.ty.ty {
+        syntax::TypeSpecifierNonArray::Float => {
+          emit_float(state)
+        }
+        _ => panic!()
+      }
+    }
+    _ => panic!()
+  }
+}
+
 pub fn emit_vec4(state: &mut OutputState) -> Word {
   match state.emitted_types.get("vec4") {
     Some(t) => *t,
@@ -551,12 +565,11 @@ pub fn translate_r_val(state: &mut OutputState, expr: &hir::Expr) -> Word {
       let r = translate_r_val(state, r);
       match op {
         syntax::BinaryOp::Add => {
-
+          let ty = emit_type(state, &expr.ty);
+          state.builder.fadd(ty, None, l, r).unwrap()
         }
         _ => panic!("Unhandled op {:?}", op)
       }
-      let float = emit_float(state);
-      state.builder.fadd(float, None, l, r).unwrap()
     }
     _ => panic!("Unhandled {:?}", expr)
   }
@@ -1229,8 +1242,8 @@ pub fn show_jump_statement<F>(f: &mut F, state: &mut OutputState, j: &hir::JumpS
 pub fn translate_external_declaration(state: &mut OutputState, ed: &hir::ExternalDeclaration) {
   match *ed {
     hir::ExternalDeclaration::Preprocessor(ref pp) => panic!("Preprocessor unsupported"),
-  hir::ExternalDeclaration::FunctionDefinition(ref fd) => translate_function_definition(state, fd),
-  hir::ExternalDeclaration::Declaration(ref d) => panic!()
+    hir::ExternalDeclaration::FunctionDefinition(ref fd) => translate_function_definition(state, fd),
+    hir::ExternalDeclaration::Declaration(ref d) => panic!()
   }
 }
 
