@@ -11,13 +11,12 @@ use glsl::syntax::TranslationUnit;
 use rspirv::mr::{Builder, Operand};
 use spirv::Word;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 
 mod hir;
 
 use hir::State;
 
-fn glsl_to_spirv(input: &str) -> String {
+pub fn glsl_to_spirv(input: &str) -> String {
   let ast = TranslationUnit::parse(input).unwrap();
   let mut state = hir::State::new();
   let hir = hir::ast_to_hir(&mut state, &ast);
@@ -35,7 +34,7 @@ fn glsl_to_spirv(input: &str) -> String {
 
   translate_translation_unit(&mut state, &hir);
 
-  let mut b = state.builder;
+  let b = state.builder;
 
   let module = b.module();
 
@@ -90,7 +89,7 @@ void main()
 
   translate_translation_unit(&mut state, &hir);
 
-  let mut b = state.builder;
+  let b = state.builder;
 
   let module = b.module();
 
@@ -558,7 +557,6 @@ pub fn translate_const(state: &mut OutputState, c: &hir::Expr) -> Word {
 }
 
 pub fn translate_vec4(state: &mut OutputState, x: &hir::Expr, y: &hir::Expr, z: &hir::Expr, w: &hir::Expr) -> Word {
-  let float = emit_float(state);
   let float_vec4 = emit_vec4(state);
   let args = [
     translate_r_val(state, x),
@@ -574,7 +572,7 @@ pub fn translate_r_val(state: &mut OutputState, expr: &hir::Expr) -> Word {
     hir::ExprKind::FunCall(ref fun, ref args) => {
       match fun {
         hir::FunIdentifier::Identifier(ref sym) => {
-          let mut name = state.hir.sym(*sym).name.as_str();
+          let name = state.hir.sym(*sym).name.as_str();
             match name {
               "vec4" => {
                 match args[..] {

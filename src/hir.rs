@@ -1,4 +1,3 @@
-use std::fmt;
 use std::iter::{FromIterator, once};
 use std::ops::{Deref, DerefMut};
 use std::collections::HashMap;
