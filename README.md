@@ -4,7 +4,9 @@ It currently only supports compiling programs of the form:
 ```glsl
 void main()
 {
-    gl_FragColor = vec4(0.2, 0.4, 0.8, 1.0);
+    float x = 0.1;
+    x = x + 0.1;
+    gl_FragColor = vec4(x, 0.4, 0.8, 1.0);
 }
 ```
 
