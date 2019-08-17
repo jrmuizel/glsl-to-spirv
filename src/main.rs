@@ -33,12 +33,8 @@ void main()
     }");
 
 */
-  let mut output_glsl = String::new();
-
-  let mut ast_glsl = String::new();
   let r = r.unwrap();
   println!("{:?}", r);
-  glsl::transpiler::glsl::show_translation_unit(&mut ast_glsl, &r);
 
   let mut state = hir::State::new();
   //println!("{:#?}", r);
@@ -87,6 +83,7 @@ pub struct OutputState {
   hir: hir::State,
   return_type: Option<Box<syntax::FullySpecifiedType>>,
   return_declared: bool,
+  //XXX: we can probably hash on something better than String
   emitted_types: HashMap<String, Word>,
   emitted_syms: HashMap<hir::SymRef, Variable>,
 }
