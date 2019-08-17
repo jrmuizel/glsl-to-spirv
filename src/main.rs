@@ -52,7 +52,6 @@ void main()
   let mut state = OutputState { hir: state,
     return_type: None,
     return_declared: false,
-    flat: false,
     builder: b,
     emitted_types: HashMap::new(),
     emitted_syms: HashMap::new(),
@@ -88,7 +87,6 @@ pub struct OutputState {
   hir: hir::State,
   return_type: Option<Box<syntax::FullySpecifiedType>>,
   return_declared: bool,
-  flat: bool,
   emitted_types: HashMap<String, Word>,
   emitted_syms: HashMap<hir::SymRef, Variable>,
 }
@@ -239,7 +237,6 @@ pub fn show_type_specifier<F>(f: &mut F, state: &mut OutputState, t: &syntax::Ty
 }
 
 pub fn show_fully_specified_type<F>(f: &mut F, state: &mut OutputState, t: &syntax::FullySpecifiedType) where F: Write {
-  state.flat = false;
   if let Some(ref qual) = t.qualifier {
     show_type_qualifier(f, &qual);
     let _ = f.write_str(" ");
