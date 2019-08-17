@@ -11,6 +11,7 @@ use glsl::syntax::TranslationUnit;
 use rspirv::mr::{Builder, Operand};
 use spirv::Word;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 mod hir;
 
@@ -468,20 +469,24 @@ pub fn emit_void(state: &mut OutputState) -> Word {
 }
 
 pub fn emit_sym(state: &mut OutputState, s: hir::SymRef) -> Word {
-  let name = &state.hir.sym(s).name;
-  match name.as_ref() {
-    "gl_FragColor" => {
-      // XXX: we emit these special variables lazily
-      // we should do better than matching by name
-      let float_vec4 = emit_vec4(state);
-      let b = &mut state.builder;
-      let output = b.type_pointer(None, spirv::StorageClass::Output, float_vec4);
-      let output_var = b.variable(output, None, spirv::StorageClass::Output, None);
-      b.decorate(output_var, spirv::Decoration::Location, [Operand::LiteralInt32(0)]);
-      output_var
-    }
-    _ => {
-      state.emitted_syms[&s].location
+  match state.emitted_syms.get(&s) {
+    Some(s) => s.location,
+    None => {
+      let name = &state.hir.sym(s).name;
+      match name.as_ref() {
+        "gl_FragColor" => {
+          // XXX: we emit these special variables lazily
+          // we should do better than matching by name
+          let float_vec4 = emit_vec4(state);
+          let b = &mut state.builder;
+          let output = b.type_pointer(None, spirv::StorageClass::Output, float_vec4);
+          let output_var = b.variable(output, None, spirv::StorageClass::Output, None);
+          b.decorate(output_var, spirv::Decoration::Location, [Operand::LiteralInt32(0)]);
+          state.emitted_syms.insert(s, Variable { location: output_var, ty: output});
+          output_var
+        }
+        _ => panic!("undeclared sym {}", name)
+      }
     }
   }
 }
