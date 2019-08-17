@@ -102,7 +102,7 @@ pub fn show_identifier<F>(f: &mut F, i: &syntax::Identifier) where F: Write {
 }
 
 pub fn show_sym<F>(f: &mut F, state: &mut OutputState, i: &hir::SymRef) where F: Write {
-  let mut name = state.hir.sym(*i).name.as_str();
+  let name = state.hir.sym(*i).name.as_str();
   let _ = f.write_str(name);
 }
 
