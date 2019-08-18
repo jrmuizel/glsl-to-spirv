@@ -25,7 +25,9 @@ pub fn glsl_to_spirv(input: &str) -> String {
   b.memory_model(spirv::AddressingModel::Logical, spirv::MemoryModel::GLSL450);
 
 
-  let mut state = OutputState { hir: state,
+  let mut state = OutputState {
+    hir: state,
+    model: spirv::ExecutionModel::Fragment,
     return_type: None,
     return_declared: false,
     builder: b,
@@ -78,7 +80,9 @@ void main() {
   b.memory_model(spirv::AddressingModel::Logical, spirv::MemoryModel::GLSL450);
 
 
-  let mut state = OutputState { hir: state,
+  let mut state = OutputState {
+    hir: state,
+    model: spirv::ExecutionModel::Fragment,
     return_type: None,
     return_declared: false,
     builder: b,
@@ -113,6 +117,7 @@ pub struct Variable {
 
 pub struct OutputState {
   builder: rspirv::mr::Builder,
+  model: spirv::ExecutionModel,
   hir: hir::State,
   return_type: Option<Box<hir::FullySpecifiedType>>,
   return_declared: bool,
@@ -966,14 +971,20 @@ pub fn translate_initializer(state: &mut OutputState, i: &hir::Initializer) -> W
 pub fn translate_single_declaration(state: &mut OutputState, d: &hir::SingleDeclaration) {
 
   let ty = emit_type(state, &d.ty.ty);
- /* match d.ty.qualifier {
-    Some(q) => {
-      match q.qualifiers.0.iter().flat_map(|q| match q {
-        syntax::TypeQualifierSpec::Storage(syntax::StorageQualifier::Out) => spirv::StorageClass::Output,
-      _ => spirv::StorageClass::Function
-    }).next().is_some();
-*/
-  let output_var = state.builder.variable(ty, None, spirv::StorageClass::Function, None);
+
+  let storage = match &state.hir.sym(d.name.unwrap()).ty {
+    hir::Type::Variable(storage, _) => {
+      match storage {
+        hir::StorageClass::Out => spirv::StorageClass::Output,
+        hir::StorageClass::In => spirv::StorageClass::Input,
+        hir::StorageClass::Uniform => spirv::StorageClass::Uniform,
+        hir::StorageClass::None => spirv::StorageClass::Function
+      }
+    }
+    _ => panic!(),
+  };
+
+  let output_var = state.builder.variable(ty, None, storage, None);
   state.emitted_syms.insert(d.name.unwrap(),  Variable{ location: output_var, ty });
 
   if let Some(ref initializer) = d.initializer {
@@ -1074,7 +1085,7 @@ pub fn translate_function_definition(state: &mut OutputState, fd: &hir::Function
                          spirv::FunctionControl::CONST),
                      voidf)
         .unwrap();
-    b.entry_point(spirv::ExecutionModel::Vertex, fun, "main", []);
+    b.entry_point(state.model, fun, "main", []);
 
     b.begin_basic_block(None).unwrap();
   }
@@ -1307,7 +1318,7 @@ void main()
 ; Generator: rspirv
 ; Bound: 19
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %3 "main"
+OpEntryPoint Fragment %3 "main"
 OpDecorate %13 Location 0
 %1 = OpTypeVoid
 %2 = OpTypeFunction %1 %1
@@ -1346,7 +1357,7 @@ fn vec_addition() {
 ; Generator: rspirv
 ; Bound: 22
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %3 "main"
+OpEntryPoint Fragment %3 "main"
 OpDecorate %14 Location 0
 %1 = OpTypeVoid
 %2 = OpTypeFunction %1 %1

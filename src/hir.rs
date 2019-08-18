@@ -21,7 +21,7 @@ use crate::hir::SimpleStatement::Jump;
 #[derive(Debug)]
 pub struct Symbol {
     pub name: String,
-    ty: Type
+    pub ty: Type
 }
 
 #[derive(Debug, Clone, PartialEq)]
