@@ -17,6 +17,8 @@ mod hir;
 use hir::State;
 use hir::FullySpecifiedType;
 
+use std::io::Write as IoWrite;
+
 pub fn glsl_to_spirv(input: &str) -> String {
   let ast = TranslationUnit::parse(input).unwrap();
   let mut state = hir::State::new();
@@ -100,6 +102,10 @@ void main() {
   let code = module.assemble();
   assert!(code.len() > 20);  // Module header contains 5 words
   assert_eq!(spirv::MAGIC_NUMBER, code[0]);
+  let mut f = std::fs::File::create("out.frag").unwrap();
+  let len = code[..].len() * 4;
+  let buf = unsafe { std::slice::from_raw_parts(code[..].as_ptr() as *const u8, len) };
+  f.write(buf);
 
   // Parsing
   let mut loader = rspirv::mr::Loader::new();
