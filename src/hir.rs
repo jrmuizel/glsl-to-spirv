@@ -14,14 +14,14 @@ use glsl::syntax::UnaryOp;
 use glsl::syntax::BinaryOp;
 use glsl::syntax::AssignmentOp;
 use glsl::syntax::Identifier;
-use crate::hir::Type::Function;
+use crate::hir::SymDecl::Function;
 use crate::hir::Initializer::Simple;
 use crate::hir::SimpleStatement::Jump;
 
 #[derive(Debug)]
 pub struct Symbol {
     pub name: String,
-    pub ty: Type
+    pub decl: SymDecl
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -41,6 +41,13 @@ pub enum StorageClass {
     In,
     Out,
     Uniform,
+}
+
+/// Type specifier.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Type {
+    pub ty: TypeSpecifierNonArray,
+    pub array_specifier: Option<ArraySpecifier>
 }
 
 /// Fully specified type.
@@ -74,15 +81,15 @@ impl From<syntax::FullySpecifiedType> for FullySpecifiedType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Type {
+pub enum SymDecl {
     Function(FunctionType),
     Variable(StorageClass, FullySpecifiedType),
     Struct(FullySpecifiedType)
 }
 
-impl Type {
+impl SymDecl {
     fn var(t: TypeSpecifierNonArray) -> Self {
-        Type::Variable(StorageClass::None, FullySpecifiedType::new(t))
+        SymDecl::Variable(StorageClass::None, FullySpecifiedType::new(t))
     }
 }
 
@@ -119,9 +126,9 @@ impl State {
         return None;
     }
 
-    fn declare(&mut self, name: &str, ty: Type) -> SymRef {
+    fn declare(&mut self, name: &str, decl: SymDecl) -> SymRef {
         let s = SymRef(self.syms.len() as u32);
-        self.syms.push(Symbol{ name: name.into(), ty});
+        self.syms.push(Symbol{ name: name.into(), decl});
         self.scopes.last_mut().unwrap().names.insert(name.into(), s);
         s
     }
@@ -783,7 +790,7 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
     ty.ty.array_specifier = d.array_specifier.clone();
     let sym = match &ty.ty.ty {
         TypeSpecifierNonArray::Struct(s) => {
-            state.declare(s.name.as_ref().unwrap().as_str(), Type::Struct(ty.clone().into()))
+            state.declare(s.name.as_ref().unwrap().as_str(), SymDecl::Struct(ty.clone().into()))
         }
         _ => {
             let mut storage = StorageClass::None;
@@ -806,7 +813,7 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
                     _ => {}
                 }
             }
-            state.declare(d.name.as_ref().unwrap().as_str(), Type::Variable(storage, ty.clone().into()))
+            state.declare(d.name.as_ref().unwrap().as_str(), SymDecl::Variable(storage, ty.clone().into()))
         }
     };
     SingleDeclaration {
@@ -887,8 +894,8 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                 Some(sym) => sym,
                 None => panic!("missing declaration {}", i.as_str())
             };
-            let ty = match &state.sym(sym).ty {
-                Type::Variable(_, ty) => ty.ty.clone(),
+            let ty = match &state.sym(sym).decl {
+                SymDecl::Variable(_, ty) => ty.ty.clone(),
                 _ => panic!("bad variable type")
             };
             Expr { kind: ExprKind::Variable(sym), ty }
@@ -947,8 +954,8 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                                 Some(s) => s,
                                 None => panic!("missing {}", i.as_str())
                             };
-                            match &state.sym(sym).ty {
-                                Type::Function(fn_ty) => {
+                            match &state.sym(sym).decl {
+                                SymDecl::Function(fn_ty) => {
                                     let mut ret = None;
                                     for sig in &fn_ty.signatures {
                                         let mut matching = true;
@@ -972,7 +979,7 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                                         }
                                     };
                                 },
-                                Type::Struct(t) => {
+                                SymDecl::Struct(t) => {
                                     ret_ty = t.ty.clone()
                                 }
                                 _ => panic!("can only call functions")
@@ -1184,7 +1191,7 @@ fn translate_function_parameter_declaration(state: &mut State, p: &syntax::Funct
 {
     match p {
         syntax::FunctionParameterDeclaration::Named(qual, p) => {
-            state.declare(p.ident.ident.as_str(), Type::Variable(
+            state.declare(p.ident.ident.as_str(), SymDecl::Variable(
                 StorageClass::None,
                 FullySpecifiedType {
                     qualifier: None,
@@ -1217,7 +1224,7 @@ fn translate_function_definition(state: &mut State, fd: &syntax::FunctionDefinit
         FunctionParameterDeclaration::Unnamed(_, p) => p.clone(),
     }).collect();
     let sig = FunctionSignature{ ret: Box::new(prototype.ty.ty.clone()), params };
-    state.declare(fd.prototype.name.as_str(), Type::Function(FunctionType{ signatures: NonEmpty::new(sig)}));
+    state.declare(fd.prototype.name.as_str(), SymDecl::Function(FunctionType{ signatures: NonEmpty::new(sig)}));
     state.push_scope(fd.prototype.name.as_str().into());
     let f = FunctionDefinition {
         prototype,
@@ -1241,8 +1248,8 @@ fn translate_external_declaration(state: &mut State, ed: &syntax::ExternalDeclar
 fn declare_function(state: &mut State, name: &str, ret: TypeSpecifier, params: Vec<TypeSpecifier>) {
     let sig = FunctionSignature{ ret: Box::new(ret), params };
     match state.lookup_sym_mut(name) {
-        Some(Symbol { ty: Type::Function(f), ..}) => f.signatures.push(sig),
-        None => { state.declare(name, Type::Function(FunctionType{ signatures: NonEmpty::new(sig)})); },
+        Some(Symbol { decl: SymDecl::Function(f), ..}) => f.signatures.push(sig),
+        None => { state.declare(name, SymDecl::Function(FunctionType{ signatures: NonEmpty::new(sig)})); },
         _ => panic!("overloaded function name {}", name)
     }
     //state.declare(name, Type::Function(FunctionType{ v}))
@@ -1312,8 +1319,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![TypeSpecifier::new(Sampler2D), TypeSpecifier::new(IVec2), TypeSpecifier::new(Int)]);
     declare_function(state, "texture", TypeSpecifier::new(Vec4),
                      vec![TypeSpecifier::new(Sampler2D), TypeSpecifier::new(Vec3)]);
-    state.declare("gl_FragCoord", Type::var(Vec4));
-    state.declare("gl_FragColor", Type::var(Vec4));
+    state.declare("gl_FragCoord", SymDecl::var(Vec4));
+    state.declare("gl_FragColor", SymDecl::var(Vec4));
 
     TranslationUnit(tu.0.map(state, translate_external_declaration))
 }
