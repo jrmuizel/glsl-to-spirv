@@ -1108,6 +1108,7 @@ pub fn translate_function_definition(state: &mut OutputState, fd: &hir::Function
                          spirv::FunctionControl::CONST),
                      voidf)
         .unwrap();
+    b.execution_mode(fun, spirv::ExecutionMode::OriginUpperLeft, []);
     b.entry_point(state.model, fun, "main", []);
 
     b.begin_basic_block(None).unwrap();
@@ -1343,6 +1344,7 @@ void main()
 OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %3 "main"
+OpExecutionMode %3 OriginUpperLeft
 OpDecorate %13 Location 0
 %1 = OpTypeVoid
 %2 = OpTypeFunction %1
@@ -1383,6 +1385,7 @@ fn vec_addition() {
 OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %3 "main"
+OpExecutionMode %3 OriginUpperLeft
 OpDecorate %14 Location 0
 %1 = OpTypeVoid
 %2 = OpTypeFunction %1
