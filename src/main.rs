@@ -24,6 +24,7 @@ pub fn glsl_to_spirv(input: &str) -> String {
   let mut state = hir::State::new();
   let hir = hir::ast_to_hir(&mut state, &ast);
   let mut b = rspirv::mr::Builder::new();
+  b.capability(spirv::Capability::Shader);
   b.memory_model(spirv::AddressingModel::Logical, spirv::MemoryModel::GLSL450);
 
 
@@ -79,6 +80,7 @@ void main() {
   //println!("{:#?}", hir);
   // Building
   let mut b = rspirv::mr::Builder::new();
+  b.capability(spirv::Capability::Shader);
   b.memory_model(spirv::AddressingModel::Logical, spirv::MemoryModel::GLSL450);
 
 
@@ -1098,7 +1100,7 @@ pub fn translate_function_definition(state: &mut OutputState, fd: &hir::Function
   {
     let void = emit_void(state);
     let b = &mut state.builder;
-    let voidf = b.type_function(void, vec![void]);
+    let voidf = b.type_function(void, vec![]);
 
     let fun = b.begin_function(ret_type,
                      None,
@@ -1338,11 +1340,12 @@ void main()
 ; Version: 1.3
 ; Generator: rspirv
 ; Bound: 19
+OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %3 "main"
 OpDecorate %13 Location 0
 %1 = OpTypeVoid
-%2 = OpTypeFunction %1 %1
+%2 = OpTypeFunction %1
 %5 = OpTypeFloat 32
 %7 = OpConstant  %5  0.1
 %9 = OpConstant  %5  0.1
@@ -1377,11 +1380,12 @@ fn vec_addition() {
 ; Version: 1.3
 ; Generator: rspirv
 ; Bound: 22
+OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %3 "main"
 OpDecorate %14 Location 0
 %1 = OpTypeVoid
-%2 = OpTypeFunction %1 %1
+%2 = OpTypeFunction %1
 %5 = OpTypeFloat 32
 %6 = OpTypeVector %5 4
 %8 = OpConstant  %5  1.0
