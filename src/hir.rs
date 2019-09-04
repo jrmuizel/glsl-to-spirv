@@ -1,22 +1,22 @@
-use std::iter::{FromIterator, once};
-use std::ops::{Deref, DerefMut};
 use std::collections::HashMap;
+use std::iter::{once, FromIterator};
+use std::ops::{Deref, DerefMut};
 
-use glsl::syntax::{NonEmpty, TypeQualifier, TypeSpecifier, TypeSpecifierNonArray};
-use glsl::syntax;
-use glsl::syntax::StructFieldSpecifier;
-use glsl::syntax::PrecisionQualifier;
-use glsl::syntax::ArrayedIdentifier;
-use glsl::syntax::ArraySpecifier;
-use glsl::syntax::TypeName;
-use glsl::syntax::StructSpecifier;
-use glsl::syntax::UnaryOp;
-use glsl::syntax::BinaryOp;
-use glsl::syntax::AssignmentOp;
-use glsl::syntax::Identifier;
-use crate::hir::SymDecl::Function;
 use crate::hir::Initializer::Simple;
 use crate::hir::SimpleStatement::Jump;
+use crate::hir::SymDecl::Function;
+use glsl::syntax;
+use glsl::syntax::ArraySpecifier;
+use glsl::syntax::ArrayedIdentifier;
+use glsl::syntax::AssignmentOp;
+use glsl::syntax::BinaryOp;
+use glsl::syntax::Identifier;
+use glsl::syntax::PrecisionQualifier;
+use glsl::syntax::StructFieldSpecifier;
+use glsl::syntax::StructSpecifier;
+use glsl::syntax::TypeName;
+use glsl::syntax::UnaryOp;
+use glsl::syntax::{NonEmpty, TypeQualifier, TypeSpecifier, TypeSpecifierNonArray};
 
 trait LiftFrom<S> {
     fn lift(state: &mut State, s: S) -> Self;
@@ -29,7 +29,7 @@ fn lift<S, T: LiftFrom<S>>(state: &mut State, s: S) -> T {
 #[derive(Debug)]
 pub struct Symbol {
     pub name: String,
-    pub decl: SymDecl
+    pub decl: SymDecl,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,7 +40,7 @@ pub struct FunctionSignature {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionType {
-    signatures: NonEmpty<FunctionSignature>
+    signatures: NonEmpty<FunctionSignature>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -53,15 +53,17 @@ pub enum StorageClass {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArraySizes {
-    pub sizes: Vec<Expr>
+    pub sizes: Vec<Expr>,
 }
 
 impl LiftFrom<&ArraySpecifier> for ArraySizes {
     fn lift(state: &mut State, a: &ArraySpecifier) -> Self {
-        ArraySizes{ sizes: vec![match a {
-            ArraySpecifier::Unsized=> panic!(),
-            ArraySpecifier::ExplicitlySized(expr) => translate_expression(state, expr)
-        }]}
+        ArraySizes {
+            sizes: vec![match a {
+                ArraySpecifier::Unsized => panic!(),
+                ArraySpecifier::ExplicitlySized(expr) => translate_expression(state, expr),
+            }],
+        }
     }
 }
 
@@ -183,7 +185,7 @@ pub enum TypeKind {
     UImage2DMSArray,
     USamplerCubeArray,
     UImageCubeArray,
-    Struct(SymRef)
+    Struct(SymRef),
 }
 
 impl LiftFrom<&syntax::TypeSpecifierNonArray> for TypeKind {
@@ -307,9 +309,7 @@ impl LiftFrom<&syntax::TypeSpecifierNonArray> for TypeKind {
             TypeSpecifierNonArray::Struct(s) => {
                 Struct(state.lookup(s.name.as_ref().unwrap().as_str()).unwrap())
             }
-            TypeSpecifierNonArray::TypeName(s) => {
-                Struct(state.lookup(&s.0).unwrap())
-            }
+            TypeSpecifierNonArray::TypeName(s) => Struct(state.lookup(&s.0).unwrap()),
         }
     }
 }
@@ -318,12 +318,16 @@ impl LiftFrom<&syntax::TypeSpecifierNonArray> for TypeKind {
 pub struct Type {
     pub kind: TypeKind,
     pub precision: Option<PrecisionQualifier>,
-    pub array_sizes: Option<Box<ArraySizes>>
+    pub array_sizes: Option<Box<ArraySizes>>,
 }
 
 impl Type {
     fn new(kind: TypeKind) -> Self {
-        Type { kind, precision: None, array_sizes: None }
+        Type {
+            kind,
+            precision: None,
+            array_sizes: None,
+        }
     }
 }
 
@@ -332,13 +336,13 @@ impl LiftFrom<&syntax::FullySpecifiedType> for Type {
         let kind = lift(state, &ty.ty.ty);
         let array_sizes = match ty.ty.array_specifier.as_ref() {
             Some(x) => Some(Box::new(lift(state, x))),
-            None => None
+            None => None,
         };
         let precision = get_precision(ty.qualifier.clone());
         Type {
             kind,
             precision,
-            array_sizes
+            array_sizes,
         }
     }
 }
@@ -346,11 +350,14 @@ impl LiftFrom<&syntax::FullySpecifiedType> for Type {
 impl LiftFrom<&syntax::TypeSpecifier> for Type {
     fn lift(state: &mut State, ty: &syntax::TypeSpecifier) -> Self {
         let kind = lift(state, &ty.ty);
-        let array_sizes = ty.array_specifier.as_ref().map(|x| Box::new(lift(state, x)));
+        let array_sizes = ty
+            .array_specifier
+            .as_ref()
+            .map(|x| Box::new(lift(state, x)));
         Type {
             kind,
             precision: None,
-            array_sizes
+            array_sizes,
         }
     }
 }
@@ -361,7 +368,7 @@ pub struct StructField {
     pub name: syntax::Identifier,
 }
 
-fn get_precision(qualifiers: Option<TypeQualifier>) -> Option<PrecisionQualifier>{
+fn get_precision(qualifiers: Option<TypeQualifier>) -> Option<PrecisionQualifier> {
     let mut precision = None;
     for qual in qualifiers.iter().flat_map(|x| x.qualifiers.0.iter()) {
         match qual {
@@ -386,23 +393,24 @@ impl LiftFrom<&StructFieldSpecifier> for StructField {
                 if let Some(a) = &ident.array_spec {
                     ty.array_sizes = Some(Box::new(lift(state, a)));
                 }
-                StructField{ ty, name: ident.ident.clone() }
+                StructField {
+                    ty,
+                    name: ident.ident.clone(),
+                }
             }
-            _ => panic!("bad number of identifiers")
+            _ => panic!("bad number of identifiers"),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructFields {
-    pub fields: Vec<StructField>
+    pub fields: Vec<StructField>,
 }
 
 impl LiftFrom<&StructSpecifier> for StructFields {
     fn lift(state: &mut State, s: &StructSpecifier) -> Self {
-        let fields = s.fields.0.iter().map(|field| {
-            lift(state, field)
-        }).collect();
+        let fields = s.fields.0.iter().map(|field| lift(state, field)).collect();
         Self { fields }
     }
 }
@@ -411,7 +419,7 @@ impl LiftFrom<&StructSpecifier> for StructFields {
 pub enum SymDecl {
     Function(FunctionType),
     Variable(StorageClass, Type),
-    Struct(StructFields)
+    Struct(StructFields),
 }
 
 impl SymDecl {
@@ -429,7 +437,12 @@ struct Scope {
     names: HashMap<String, SymRef>,
 }
 impl Scope {
-    fn new(name: String) -> Self {  Scope { name, names: HashMap::new() }}
+    fn new(name: String) -> Self {
+        Scope {
+            name,
+            names: HashMap::new(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -438,10 +451,12 @@ pub struct State {
     syms: Vec<Symbol>,
 }
 
-
 impl State {
     pub fn new() -> Self {
-        State { scopes: Vec::new(), syms: Vec::new() }
+        State {
+            scopes: Vec::new(),
+            syms: Vec::new(),
+        }
     }
 
     fn lookup(&self, name: &str) -> Option<SymRef> {
@@ -455,7 +470,10 @@ impl State {
 
     fn declare(&mut self, name: &str, decl: SymDecl) -> SymRef {
         let s = SymRef(self.syms.len() as u32);
-        self.syms.push(Symbol{ name: name.into(), decl});
+        self.syms.push(Symbol {
+            name: name.into(),
+            decl,
+        });
         self.scopes.last_mut().unwrap().names.insert(name.into(), s);
         s
     }
@@ -483,7 +501,7 @@ pub enum Declaration {
     InitDeclaratorList(InitDeclaratorList),
     Precision(PrecisionQualifier, TypeSpecifier),
     Block(Block),
-    Global(TypeQualifier, Vec<Identifier>)
+    Global(TypeQualifier, Vec<Identifier>),
 }
 
 /// A general purpose block, containing fields and possibly a list of declared identifiers. Semantic
@@ -493,14 +511,14 @@ pub struct Block {
     pub qualifier: TypeQualifier,
     pub name: Identifier,
     pub fields: Vec<StructFieldSpecifier>,
-    pub identifier: Option<ArrayedIdentifier>
+    pub identifier: Option<ArrayedIdentifier>,
 }
 
 /// Function identifier.
 #[derive(Clone, Debug, PartialEq)]
 pub enum FunIdentifier {
     Identifier(SymRef),
-    Expr(Box<Expr>)
+    Expr(Box<Expr>),
 }
 
 /// Function prototype.
@@ -508,21 +526,21 @@ pub enum FunIdentifier {
 pub struct FunctionPrototype {
     pub ty: Type,
     pub name: Identifier,
-    pub parameters: Vec<FunctionParameterDeclaration>
+    pub parameters: Vec<FunctionParameterDeclaration>,
 }
 
 /// Function parameter declaration.
 #[derive(Clone, Debug, PartialEq)]
 pub enum FunctionParameterDeclaration {
     Named(Option<TypeQualifier>, FunctionParameterDeclarator),
-    Unnamed(Option<TypeQualifier>, TypeSpecifier)
+    Unnamed(Option<TypeQualifier>, TypeSpecifier),
 }
 
 /// Function parameter declarator.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FunctionParameterDeclarator {
     pub ty: Type,
-    pub ident: Identifier
+    pub ident: Identifier,
 }
 
 /// Init declarator list.
@@ -531,7 +549,7 @@ pub struct InitDeclaratorList {
     // XXX it feels like separating out the type and the names is better than
     // head and tail
     pub head: SingleDeclaration,
-    pub tail: Vec<SingleDeclarationNoType>
+    pub tail: Vec<SingleDeclarationNoType>,
 }
 
 /// Single declaration.
@@ -540,21 +558,21 @@ pub struct SingleDeclaration {
     pub ty: Type,
     pub qualifier: Option<TypeQualifier>,
     pub name: Option<SymRef>,
-    pub initializer: Option<Initializer>
+    pub initializer: Option<Initializer>,
 }
 
 /// A single declaration with implicit, already-defined type.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SingleDeclarationNoType {
     pub ident: ArrayedIdentifier,
-    pub initializer: Option<Initializer>
+    pub initializer: Option<Initializer>,
 }
 
 /// Initializer.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Initializer {
     Simple(Box<Expr>),
-    List(NonEmpty<Initializer>)
+    List(NonEmpty<Initializer>),
 }
 
 impl From<Expr> for Initializer {
@@ -566,7 +584,7 @@ impl From<Expr> for Initializer {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Expr {
     pub kind: ExprKind,
-    pub ty: Type
+    pub ty: Type,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -579,7 +597,7 @@ pub enum FieldSet {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SwizzleSelector {
     pub field_set: FieldSet,
-    pub components: Vec<i8>
+    pub components: Vec<i8>,
 }
 
 impl SwizzleSelector {
@@ -589,37 +607,76 @@ impl SwizzleSelector {
 
         for c in s.chars() {
             match c {
-                'r' => { components.push(0); field_set.push(FieldSet::Rgba); }
-                'x' => { components.push(0); field_set.push(FieldSet::Xyzw); }
-                's' => { components.push(0); field_set.push(FieldSet::Stpq); }
+                'r' => {
+                    components.push(0);
+                    field_set.push(FieldSet::Rgba);
+                }
+                'x' => {
+                    components.push(0);
+                    field_set.push(FieldSet::Xyzw);
+                }
+                's' => {
+                    components.push(0);
+                    field_set.push(FieldSet::Stpq);
+                }
 
-                'g' => { components.push(1); field_set.push(FieldSet::Rgba); }
-                'y' => { components.push(1); field_set.push(FieldSet::Xyzw); }
-                't' => { components.push(1); field_set.push(FieldSet::Stpq); }
+                'g' => {
+                    components.push(1);
+                    field_set.push(FieldSet::Rgba);
+                }
+                'y' => {
+                    components.push(1);
+                    field_set.push(FieldSet::Xyzw);
+                }
+                't' => {
+                    components.push(1);
+                    field_set.push(FieldSet::Stpq);
+                }
 
-                'b' => { components.push(2); field_set.push(FieldSet::Rgba); }
-                'z' => { components.push(2); field_set.push(FieldSet::Xyzw); }
-                'p' => { components.push(2); field_set.push(FieldSet::Stpq); }
+                'b' => {
+                    components.push(2);
+                    field_set.push(FieldSet::Rgba);
+                }
+                'z' => {
+                    components.push(2);
+                    field_set.push(FieldSet::Xyzw);
+                }
+                'p' => {
+                    components.push(2);
+                    field_set.push(FieldSet::Stpq);
+                }
 
-                'a' => { components.push(3); field_set.push(FieldSet::Rgba); }
-                'w' => { components.push(3); field_set.push(FieldSet::Xyzw); }
-                'q' => { components.push(3); field_set.push(FieldSet::Stpq); }
-                _ => panic!("bad selector")
+                'a' => {
+                    components.push(3);
+                    field_set.push(FieldSet::Rgba);
+                }
+                'w' => {
+                    components.push(3);
+                    field_set.push(FieldSet::Xyzw);
+                }
+                'q' => {
+                    components.push(3);
+                    field_set.push(FieldSet::Stpq);
+                }
+                _ => panic!("bad selector"),
             }
         }
 
         let first = &field_set[0];
         assert!(field_set.iter().all(|item| item == first));
         assert!(components.len() <= 4);
-        SwizzleSelector { field_set: first.clone(), components }
+        SwizzleSelector {
+            field_set: first.clone(),
+            components,
+        }
     }
 
     pub fn to_string(&self) -> String {
         let mut s = String::new();
         let fs = match self.field_set {
-            FieldSet::Rgba => ['r','g','b','a'],
-            FieldSet::Xyzw => ['x', 'y','z','w'],
-            FieldSet::Stpq => ['s','t','p','q'],
+            FieldSet::Rgba => ['r', 'g', 'b', 'a'],
+            FieldSet::Xyzw => ['x', 'y', 'z', 'w'],
+            FieldSet::Stpq => ['s', 't', 'p', 'q'],
         };
         for i in &self.components {
             s.push(fs[*i as usize])
@@ -669,7 +726,7 @@ pub enum ExprKind {
     /// Post-decrementation of an expression.
     PostDec(Box<Expr>),
     /// An expression that contains several, separated with comma.
-    Comma(Box<Expr>, Box<Expr>)
+    Comma(Box<Expr>, Box<Expr>),
 }
 
 /*
@@ -713,7 +770,10 @@ impl TranslationUnit {
     /// # Errors
     ///
     /// `None` if the iterator yields no value.
-    pub fn from_iter<I>(iter: I) -> Option<Self> where I: IntoIterator<Item = ExternalDeclaration> {
+    pub fn from_iter<I>(iter: I) -> Option<Self>
+    where
+        I: IntoIterator<Item = ExternalDeclaration>,
+    {
         NonEmpty::from_iter(iter).map(TranslationUnit)
     }
 }
@@ -764,7 +824,7 @@ impl<'a> IntoIterator for &'a mut TranslationUnit {
 pub enum ExternalDeclaration {
     Preprocessor(Preprocessor),
     FunctionDefinition(FunctionDefinition),
-    Declaration(Declaration)
+    Declaration(Declaration),
 }
 
 /// Function definition.
@@ -777,13 +837,16 @@ pub struct FunctionDefinition {
 /// Compound statement (with no new scope).
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompoundStatement {
-    pub statement_list: Vec<Statement>
+    pub statement_list: Vec<Statement>,
 }
 
 impl FromIterator<Statement> for CompoundStatement {
-    fn from_iter<T>(iter: T) -> Self where T: IntoIterator<Item = Statement> {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = Statement>,
+    {
         CompoundStatement {
-            statement_list: iter.into_iter().collect()
+            statement_list: iter.into_iter().collect(),
         }
     }
 }
@@ -792,7 +855,7 @@ impl FromIterator<Statement> for CompoundStatement {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Statement {
     Compound(Box<CompoundStatement>),
-    Simple(Box<SimpleStatement>)
+    Simple(Box<SimpleStatement>),
 }
 
 /// Simple statement.
@@ -803,54 +866,53 @@ pub enum SimpleStatement {
     Selection(SelectionStatement),
     Switch(SwitchStatement),
     Iteration(IterationStatement),
-    Jump(JumpStatement)
+    Jump(JumpStatement),
 }
 
 impl SimpleStatement {
     /// Create a new expression statement.
-    pub fn new_expr<E>(expr: E) -> Self where E: Into<Expr> {
+    pub fn new_expr<E>(expr: E) -> Self
+    where
+        E: Into<Expr>,
+    {
         SimpleStatement::Expression(Some(expr.into()))
     }
 
     /// Create a new selection statement (if / else).
-    pub fn new_if_else<If, True, False>(
-        ife: If,
-        truee: True,
-        falsee: False
-    ) -> Self
-        where If: Into<Expr>,
-              True: Into<Statement>,
-              False: Into<Statement> {
-        SimpleStatement::Selection(
-            SelectionStatement {
-                cond: Box::new(ife.into()),
-                rest: SelectionRestStatement::Else(Box::new(truee.into()), Box::new(falsee.into()))
-            }
-        )
+    pub fn new_if_else<If, True, False>(ife: If, truee: True, falsee: False) -> Self
+    where
+        If: Into<Expr>,
+        True: Into<Statement>,
+        False: Into<Statement>,
+    {
+        SimpleStatement::Selection(SelectionStatement {
+            cond: Box::new(ife.into()),
+            rest: SelectionRestStatement::Else(Box::new(truee.into()), Box::new(falsee.into())),
+        })
     }
 
     /// Create a new while statement.
-    pub fn new_while<C, S>(
-        cond: C,
-        body: S
-    ) -> Self
-        where C: Into<Condition>,
-              S: Into<Statement> {
-        SimpleStatement::Iteration(
-            IterationStatement::While(cond.into(), Box::new(body.into()))
-        )
+    pub fn new_while<C, S>(cond: C, body: S) -> Self
+    where
+        C: Into<Condition>,
+        S: Into<Statement>,
+    {
+        SimpleStatement::Iteration(IterationStatement::While(
+            cond.into(),
+            Box::new(body.into()),
+        ))
     }
 
     /// Create a new do-while statement.
-    pub fn new_do_while<C, S>(
-        body: S,
-        cond: C
-    ) -> Self
-        where S: Into<Statement>,
-              C: Into<Expr> {
-        SimpleStatement::Iteration(
-            IterationStatement::DoWhile(Box::new(body.into()), Box::new(cond.into()))
-        )
+    pub fn new_do_while<C, S>(body: S, cond: C) -> Self
+    where
+        S: Into<Statement>,
+        C: Into<Expr>,
+    {
+        SimpleStatement::Iteration(IterationStatement::DoWhile(
+            Box::new(body.into()),
+            Box::new(cond.into()),
+        ))
     }
 }
 
@@ -861,7 +923,7 @@ pub type ExprStatement = Option<Expr>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct SelectionStatement {
     pub cond: Box<Expr>,
-    pub rest: SelectionRestStatement
+    pub rest: SelectionRestStatement,
 }
 
 /// Condition.
@@ -882,28 +944,28 @@ pub enum SelectionRestStatement {
     /// Body of the if.
     Statement(Box<Statement>),
     /// The first argument is the body of the if, the rest is the next statement.
-    Else(Box<Statement>, Box<Statement>)
+    Else(Box<Statement>, Box<Statement>),
 }
 
 /// Switch statement.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SwitchStatement {
     pub head: Box<Expr>,
-    pub cases: Vec<Case>
+    pub cases: Vec<Case>,
 }
 
 /// Case label statement.
 #[derive(Clone, Debug, PartialEq)]
 pub enum CaseLabel {
     Case(Box<Expr>),
-    Def
+    Def,
 }
 
 /// An individual case
 #[derive(Clone, Debug, PartialEq)]
 pub struct Case {
     pub label: CaseLabel,
-    pub stmts: Vec<Statement>
+    pub stmts: Vec<Statement>,
 }
 
 /// Iteration statement.
@@ -911,21 +973,21 @@ pub struct Case {
 pub enum IterationStatement {
     While(Condition, Box<Statement>),
     DoWhile(Box<Statement>, Box<Expr>),
-    For(ForInitStatement, ForRestStatement, Box<Statement>)
+    For(ForInitStatement, ForRestStatement, Box<Statement>),
 }
 
 /// For init statement.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ForInitStatement {
     Expression(Option<Expr>),
-    Declaration(Box<Declaration>)
+    Declaration(Box<Declaration>),
 }
 
 /// For init statement.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ForRestStatement {
     pub condition: Option<Condition>,
-    pub post_expr: Option<Box<Expr>>
+    pub post_expr: Option<Box<Expr>>,
 }
 
 /// Jump statement.
@@ -934,7 +996,7 @@ pub enum JumpStatement {
     Continue,
     Break,
     Return(Box<Expr>),
-    Discard
+    Discard,
 }
 
 /// Some basic preprocessor commands.
@@ -949,7 +1011,7 @@ pub enum JumpStatement {
 pub enum Preprocessor {
     Define(PreprocessorDefine),
     Version(PreprocessorVersion),
-    Extension(PreprocessorExtension)
+    Extension(PreprocessorExtension),
 }
 
 /// A #define preprocessor command.
@@ -964,7 +1026,7 @@ pub struct PreprocessorDefine {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PreprocessorVersion {
     pub version: u16,
-    pub profile: Option<PreprocessorVersionProfile>
+    pub profile: Option<PreprocessorVersionProfile>,
 }
 
 /// A #version profile annotation.
@@ -972,14 +1034,14 @@ pub struct PreprocessorVersion {
 pub enum PreprocessorVersionProfile {
     Core,
     Compatibility,
-    ES
+    ES,
 }
 
 /// An #extension preprocessor command.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PreprocessorExtension {
     pub name: PreprocessorExtensionName,
-    pub behavior: Option<PreprocessorExtensionBehavior>
+    pub behavior: Option<PreprocessorExtensionBehavior>,
 }
 
 /// An #extension name annotation.
@@ -988,7 +1050,7 @@ pub enum PreprocessorExtensionName {
     /// All extensions you could ever imagine in your whole lifetime (how crazy is that!).
     All,
     /// A specific extension.
-    Specific(String)
+    Specific(String),
 }
 
 /// An #extension behavior annotation.
@@ -997,7 +1059,7 @@ pub enum PreprocessorExtensionBehavior {
     Require,
     Enable,
     Warn,
-    Disable
+    Disable,
 }
 
 trait NonEmptyExt<T> {
@@ -1014,15 +1076,19 @@ impl<T> NonEmptyExt<T> for NonEmpty<T> {
     }
 }
 
-
 fn translate_initializater(state: &mut State, i: &syntax::Initializer) -> Initializer {
     match i {
-        syntax::Initializer::Simple(i) => Initializer::Simple(Box::new(translate_expression(state, i))),
-        _ => panic!()
+        syntax::Initializer::Simple(i) => {
+            Initializer::Simple(Box::new(translate_expression(state, i)))
+        }
+        _ => panic!(),
     }
 }
 
-fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration) -> SingleDeclaration {
+fn translate_single_declaration(
+    state: &mut State,
+    d: &syntax::SingleDeclaration,
+) -> SingleDeclaration {
     let mut ty = d.ty.clone();
     ty.ty.array_specifier = d.array_specifier.clone();
     let sym = match &ty.ty.ty {
@@ -1034,20 +1100,18 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
             let mut storage = StorageClass::None;
             for qual in ty.qualifier.iter().flat_map(|x| x.qualifiers.0.iter()) {
                 match qual {
-                    syntax::TypeQualifierSpec::Storage(s) => {
-                        match (&storage, s) {
-                            (StorageClass::None, syntax::StorageQualifier::Out) => {
-                                storage = StorageClass::Out
-                            }
-                            (StorageClass::None, syntax::StorageQualifier::In) => {
-                                storage = StorageClass::In
-                            }
-                            (StorageClass::None, syntax::StorageQualifier::Uniform) => {
-                                storage = StorageClass::Uniform
-                            }
-                            _ => panic!("bad storage {:?}", (storage, s))
+                    syntax::TypeQualifierSpec::Storage(s) => match (&storage, s) {
+                        (StorageClass::None, syntax::StorageQualifier::Out) => {
+                            storage = StorageClass::Out
                         }
-                    }
+                        (StorageClass::None, syntax::StorageQualifier::In) => {
+                            storage = StorageClass::In
+                        }
+                        (StorageClass::None, syntax::StorageQualifier::Uniform) => {
+                            storage = StorageClass::Uniform
+                        }
+                        _ => panic!("bad storage {:?}", (storage, s)),
+                    },
                     _ => {}
                 }
             }
@@ -1065,18 +1129,31 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
         qualifier: d.ty.qualifier.clone(),
         name: d.name.as_ref().and(Some(sym)),
         ty,
-        initializer: d.initializer.as_ref().map(|x| translate_initializater(state, x)),
+        initializer: d
+            .initializer
+            .as_ref()
+            .map(|x| translate_initializater(state, x)),
     }
 }
 
-fn translate_single_declaration_no_type(state: &mut State, d: &syntax::SingleDeclarationNoType) -> SingleDeclarationNoType {
+fn translate_single_declaration_no_type(
+    state: &mut State,
+    d: &syntax::SingleDeclarationNoType,
+) -> SingleDeclarationNoType {
     panic!()
 }
 
-fn translate_init_declarator_list(state: &mut State, l: &syntax::InitDeclaratorList) -> InitDeclaratorList {
+fn translate_init_declarator_list(
+    state: &mut State,
+    l: &syntax::InitDeclaratorList,
+) -> InitDeclaratorList {
     InitDeclaratorList {
         head: translate_single_declaration(state, &l.head),
-        tail: l.tail.iter().map(|x| translate_single_declaration_no_type(state, x)).collect()
+        tail: l
+            .tail
+            .iter()
+            .map(|x| translate_single_declaration_no_type(state, x))
+            .collect(),
     }
 }
 
@@ -1085,26 +1162,24 @@ fn translate_declaration(state: &mut State, d: &syntax::Declaration) -> Declarat
         syntax::Declaration::Block(b) => Declaration::Block(panic!()),
         syntax::Declaration::FunctionPrototype(p) => Declaration::FunctionPrototype(panic!()),
         syntax::Declaration::Global(ty, ids) => Declaration::Global(panic!(), panic!()),
-        syntax::Declaration::InitDeclaratorList(dl) => Declaration::InitDeclaratorList(translate_init_declarator_list(state, dl)),
+        syntax::Declaration::InitDeclaratorList(dl) => {
+            Declaration::InitDeclaratorList(translate_init_declarator_list(state, dl))
+        }
         syntax::Declaration::Precision(p, ts) => Declaration::Precision(panic!(), panic!()),
     }
 }
 
 fn is_vector(ty: &Type) -> bool {
     match ty.kind {
-        TypeKind::Vec3 | TypeKind::Vec2 | TypeKind::Vec4 => {
-            true
-        }
-        _ => false
+        TypeKind::Vec3 | TypeKind::Vec2 | TypeKind::Vec4 => true,
+        _ => false,
     }
 }
 
 fn compatible_type(lhs: &Type, rhs: &Type) -> bool {
-    if lhs == &Type::new(TypeKind::Double) &&
-        rhs == &Type::new(TypeKind::Float) {
+    if lhs == &Type::new(TypeKind::Double) && rhs == &Type::new(TypeKind::Float) {
         true
-    } else if rhs == &Type::new(TypeKind::Double) &&
-        lhs == &Type::new(TypeKind::Float) {
+    } else if rhs == &Type::new(TypeKind::Double) && lhs == &Type::new(TypeKind::Float) {
         true
     } else {
         lhs == rhs
@@ -1112,18 +1187,18 @@ fn compatible_type(lhs: &Type, rhs: &Type) -> bool {
 }
 
 fn promoted_type(lhs: &Type, rhs: &Type) -> Type {
-    if lhs == &Type::new(TypeKind::Double) &&
-        rhs == &Type::new(TypeKind::Float) {
+    if lhs == &Type::new(TypeKind::Double) && rhs == &Type::new(TypeKind::Float) {
         Type::new(TypeKind::Double)
-    } else if lhs == &Type::new(TypeKind::Float) &&
-        rhs == &Type::new(TypeKind::Double) {
+    } else if lhs == &Type::new(TypeKind::Float) && rhs == &Type::new(TypeKind::Double) {
         Type::new(TypeKind::Double)
-    } else if is_vector(&lhs) && (rhs == &Type::new(TypeKind::Float) ||
-        rhs == &Type::new(TypeKind::Double)) {
+    } else if is_vector(&lhs)
+        && (rhs == &Type::new(TypeKind::Float) || rhs == &Type::new(TypeKind::Double))
+    {
         // scalars promote to vectors
         lhs.clone()
-    } else if is_vector(&rhs) && (lhs == &Type::new(TypeKind::Float) ||
-        lhs == &Type::new(TypeKind::Double)) {
+    } else if is_vector(&rhs)
+        && (lhs == &Type::new(TypeKind::Float) || lhs == &Type::new(TypeKind::Double))
+    {
         // scalars promote to vectors
         rhs.clone()
     } else {
@@ -1137,20 +1212,26 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
         syntax::Expr::Variable(i) => {
             let sym = match state.lookup(i.as_str()) {
                 Some(sym) => sym,
-                None => panic!("missing declaration {}", i.as_str())
+                None => panic!("missing declaration {}", i.as_str()),
             };
             let ty = match &state.sym(sym).decl {
                 SymDecl::Variable(_, ty) => ty.clone(),
-                _ => panic!("bad variable type")
+                _ => panic!("bad variable type"),
             };
-            Expr { kind: ExprKind::Variable(sym), ty }
-        },
+            Expr {
+                kind: ExprKind::Variable(sym),
+                ty,
+            }
+        }
         syntax::Expr::Assignment(lhs, op, rhs) => {
             let lhs = Box::new(translate_expression(state, lhs));
             let rhs = Box::new(translate_expression(state, rhs));
             assert!(compatible_type(&lhs.ty, &rhs.ty));
             let ty = lhs.ty.clone();
-            Expr { kind: ExprKind::Assignment(lhs, op.clone(), rhs), ty }
+            Expr {
+                kind: ExprKind::Assignment(lhs, op.clone(), rhs),
+                ty,
+            }
         }
         syntax::Expr::Binary(op, lhs, rhs) => {
             let lhs = Box::new(translate_expression(state, lhs));
@@ -1164,40 +1245,54 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             } else {
                 promoted_type(&lhs.ty, &rhs.ty)
             };
-            Expr { kind: ExprKind::Binary(op.clone(), lhs, rhs), ty}
+            Expr {
+                kind: ExprKind::Binary(op.clone(), lhs, rhs),
+                ty,
+            }
         }
         syntax::Expr::Unary(op, e) => {
             let e = Box::new(translate_expression(state, e));
             let ty = e.ty.clone();
-            Expr { kind: ExprKind::Unary(op.clone(), e), ty}
+            Expr {
+                kind: ExprKind::Unary(op.clone(), e),
+                ty,
+            }
         }
-        syntax::Expr::BoolConst(b) => {
-            Expr { kind: ExprKind::BoolConst(*b), ty: Type::new(TypeKind::Bool) }
-        }
+        syntax::Expr::BoolConst(b) => Expr {
+            kind: ExprKind::BoolConst(*b),
+            ty: Type::new(TypeKind::Bool),
+        },
         syntax::Expr::Comma(lhs, rhs) => {
             let lhs = Box::new(translate_expression(state, lhs));
             let rhs = Box::new(translate_expression(state, rhs));
             assert_eq!(lhs.ty, rhs.ty);
             let ty = lhs.ty.clone();
-            Expr { kind: ExprKind::Comma(lhs, rhs), ty }
+            Expr {
+                kind: ExprKind::Comma(lhs, rhs),
+                ty,
+            }
         }
-        syntax::Expr::DoubleConst(d) => {
-            Expr { kind: ExprKind::DoubleConst(*d), ty: Type::new(TypeKind::Double) }
-        }
-        syntax::Expr::FloatConst(f) => {
-            Expr { kind: ExprKind::FloatConst(*f), ty: Type::new(TypeKind::Float) }
+        syntax::Expr::DoubleConst(d) => Expr {
+            kind: ExprKind::DoubleConst(*d),
+            ty: Type::new(TypeKind::Double),
+        },
+        syntax::Expr::FloatConst(f) => Expr {
+            kind: ExprKind::FloatConst(*f),
+            ty: Type::new(TypeKind::Float),
         },
         syntax::Expr::FunCall(fun, params) => {
             let ret_ty: Type;
-            let params: Vec<Expr> = params.iter().map(|x| translate_expression(state, x)).collect();
+            let params: Vec<Expr> = params
+                .iter()
+                .map(|x| translate_expression(state, x))
+                .collect();
             Expr {
-                kind:
-                ExprKind::FunCall(
+                kind: ExprKind::FunCall(
                     match fun {
                         syntax::FunIdentifier::Identifier(i) => {
                             let sym = match state.lookup(i.as_str()) {
                                 Some(s) => s,
-                                None => panic!("missing {}", i.as_str())
+                                None => panic!("missing {}", i.as_str()),
                             };
                             match &state.sym(sym).decl {
                                 SymDecl::Function(fn_ty) => {
@@ -1223,37 +1318,43 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                                             panic!("no matching func {}", i.as_str())
                                         }
                                     };
-                                },
-                                SymDecl::Struct(t) => {
-                                    ret_ty = Type::new(TypeKind::Struct(sym))
                                 }
-                                _ => panic!("can only call functions")
+                                SymDecl::Struct(t) => ret_ty = Type::new(TypeKind::Struct(sym)),
+                                _ => panic!("can only call functions"),
                             };
 
                             FunIdentifier::Identifier(sym)
-                        },
-                        _ => panic!()
+                        }
+                        _ => panic!(),
                     },
-                    params
+                    params,
                 ),
                 ty: ret_ty,
             }
         }
-        syntax::Expr::IntConst(i) => {
-            Expr { kind: ExprKind::IntConst(*i), ty: Type::new(TypeKind::Int) }
-        }
-        syntax::Expr::UIntConst(u) => {
-            Expr { kind: ExprKind::UIntConst(*u), ty: Type::new(TypeKind::UInt) }
-        }
+        syntax::Expr::IntConst(i) => Expr {
+            kind: ExprKind::IntConst(*i),
+            ty: Type::new(TypeKind::Int),
+        },
+        syntax::Expr::UIntConst(u) => Expr {
+            kind: ExprKind::UIntConst(*u),
+            ty: Type::new(TypeKind::UInt),
+        },
         syntax::Expr::PostDec(e) => {
             let e = Box::new(translate_expression(state, e));
             let ty = e.ty.clone();
-            Expr { kind: ExprKind::PostDec(e), ty }
+            Expr {
+                kind: ExprKind::PostDec(e),
+                ty,
+            }
         }
         syntax::Expr::PostInc(e) => {
             let e = Box::new(translate_expression(state, e));
             let ty = e.ty.clone();
-            Expr { kind: ExprKind::PostInc(e), ty }
+            Expr {
+                kind: ExprKind::PostInc(e),
+                ty,
+            }
         }
         syntax::Expr::Ternary(cond, lhs, rhs) => {
             let cond = Box::new(translate_expression(state, cond));
@@ -1261,7 +1362,10 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             let rhs = Box::new(translate_expression(state, rhs));
             assert_eq!(lhs.ty, rhs.ty);
             let ty = lhs.ty.clone();
-            Expr { kind: ExprKind::Ternary(cond, lhs, rhs), ty }
+            Expr {
+                kind: ExprKind::Ternary(cond, lhs, rhs),
+                ty,
+            }
         }
         syntax::Expr::Dot(e, i) => {
             let e = Box::new(translate_expression(state, e));
@@ -1275,13 +1379,19 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                     _ => panic!(),
                 });
 
-                Expr { kind: ExprKind::SwizzleSelector(e, SwizzleSelector::parse(i.as_str())), ty }
+                Expr {
+                    kind: ExprKind::SwizzleSelector(e, SwizzleSelector::parse(i.as_str())),
+                    ty,
+                }
             } else {
                 panic!();
-                Expr { kind: ExprKind::Dot(e, i.clone()), ty }
+                Expr {
+                    kind: ExprKind::Dot(e, i.clone()),
+                    ty,
+                }
             }
         }
-        syntax::Expr::Bracket(e, specifier) =>{
+        syntax::Expr::Bracket(e, specifier) => {
             let e = Box::new(translate_expression(state, e));
             let ty = if is_vector(&e.ty) {
                 Type::new(TypeKind::Float)
@@ -1291,9 +1401,12 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             };
             let indx = match specifier {
                 ArraySpecifier::Unsized => panic!("need expression"),
-                ArraySpecifier::ExplicitlySized(e) => translate_expression(state, e)
+                ArraySpecifier::ExplicitlySized(e) => translate_expression(state, e),
             };
-            Expr { kind: ExprKind::Bracket(e, Box::new(indx)), ty }
+            Expr {
+                kind: ExprKind::Bracket(e, Box::new(indx)),
+                ty,
+            }
         }
     }
 }
@@ -1304,31 +1417,27 @@ fn translate_switch(state: &mut State, s: &syntax::SwitchStatement) -> SwitchSta
     let mut case = None;
     for stmt in &s.body {
         match stmt {
-            syntax::Statement::Simple(s) => {
-                match &**s {
-                    syntax::SimpleStatement::CaseLabel(label) => {
-                        match case.take() {
-                            Some(case) => cases.push(case),
-                            _ => {}
-                        }
-                        case = Some(Case { label: translate_case(state, &label), stmts: Vec::new() })
+            syntax::Statement::Simple(s) => match &**s {
+                syntax::SimpleStatement::CaseLabel(label) => {
+                    match case.take() {
+                        Some(case) => cases.push(case),
+                        _ => {}
                     }
-                    _ => {
-                        match case {
-                            Some(ref mut case) => case.stmts.push(translate_statement(state, stmt)),
-                            _ => panic!("switch must start with case")
-                        }
-                    }
+                    case = Some(Case {
+                        label: translate_case(state, &label),
+                        stmts: Vec::new(),
+                    })
                 }
-            }
-            _ => {
-                match case {
+                _ => match case {
                     Some(ref mut case) => case.stmts.push(translate_statement(state, stmt)),
-                    _ => panic!("switch must start with case")
-                }
-            }
+                    _ => panic!("switch must start with case"),
+                },
+            },
+            _ => match case {
+                Some(ref mut case) => case.stmts.push(translate_statement(state, stmt)),
+                _ => panic!("switch must start with case"),
+            },
         }
-
     }
     match case.take() {
         Some(case) => cases.push(case),
@@ -1336,7 +1445,7 @@ fn translate_switch(state: &mut State, s: &syntax::SwitchStatement) -> SwitchSta
     }
     SwitchStatement {
         head: Box::new(translate_expression(state, &s.head)),
-        cases
+        cases,
     }
 }
 
@@ -1345,55 +1454,77 @@ fn translate_jump(state: &mut State, s: &syntax::JumpStatement) -> JumpStatement
         syntax::JumpStatement::Break => JumpStatement::Break,
         syntax::JumpStatement::Continue => JumpStatement::Continue,
         syntax::JumpStatement::Discard => JumpStatement::Discard,
-        syntax::JumpStatement::Return(e) => JumpStatement::Return(Box::new(translate_expression(state, e)))
+        syntax::JumpStatement::Return(e) => {
+            JumpStatement::Return(Box::new(translate_expression(state, e)))
+        }
     }
 }
 
 fn translate_condition(state: &mut State, c: &syntax::Condition) -> Condition {
     match c {
         syntax::Condition::Expr(e) => Condition::Expr(Box::new(translate_expression(state, e))),
-        _ => panic!()
+        _ => panic!(),
     }
 }
 
 fn translate_for_init(state: &mut State, s: &syntax::ForInitStatement) -> ForInitStatement {
     match s {
-        syntax::ForInitStatement::Expression(e) => ForInitStatement::Expression(e.as_ref().map(|e| translate_expression(state, e))),
-        syntax::ForInitStatement::Declaration(d) => ForInitStatement::Declaration(Box::new(translate_declaration(state, d))),
+        syntax::ForInitStatement::Expression(e) => {
+            ForInitStatement::Expression(e.as_ref().map(|e| translate_expression(state, e)))
+        }
+        syntax::ForInitStatement::Declaration(d) => {
+            ForInitStatement::Declaration(Box::new(translate_declaration(state, d)))
+        }
     }
 }
 
 fn translate_for_rest(state: &mut State, s: &syntax::ForRestStatement) -> ForRestStatement {
     ForRestStatement {
         condition: s.condition.as_ref().map(|c| translate_condition(state, c)),
-        post_expr: s.post_expr.as_ref().map(|e| Box::new(translate_expression(state, e)))
+        post_expr: s
+            .post_expr
+            .as_ref()
+            .map(|e| Box::new(translate_expression(state, e))),
     }
 }
 
 fn translate_iteration(state: &mut State, s: &syntax::IterationStatement) -> IterationStatement {
     match s {
-        syntax::IterationStatement::While(cond, s) =>
-            IterationStatement::While(translate_condition(state, cond), Box::new(translate_statement(state, s))),
-        syntax::IterationStatement::For(init, rest, s) =>
-            IterationStatement::For(translate_for_init(state, init),translate_for_rest(state, rest), Box::new(translate_statement(state, s))),
-        syntax::IterationStatement::DoWhile(s, e) =>
-            IterationStatement::DoWhile(Box::new(translate_statement(state, s)), Box::new(translate_expression(state, e))),
+        syntax::IterationStatement::While(cond, s) => IterationStatement::While(
+            translate_condition(state, cond),
+            Box::new(translate_statement(state, s)),
+        ),
+        syntax::IterationStatement::For(init, rest, s) => IterationStatement::For(
+            translate_for_init(state, init),
+            translate_for_rest(state, rest),
+            Box::new(translate_statement(state, s)),
+        ),
+        syntax::IterationStatement::DoWhile(s, e) => IterationStatement::DoWhile(
+            Box::new(translate_statement(state, s)),
+            Box::new(translate_expression(state, e)),
+        ),
     }
 }
 
 fn translate_case(state: &mut State, c: &syntax::CaseLabel) -> CaseLabel {
     match c {
         syntax::CaseLabel::Def => CaseLabel::Def,
-        syntax::CaseLabel::Case(e) => CaseLabel::Case(Box::new(translate_expression(state, e)))
+        syntax::CaseLabel::Case(e) => CaseLabel::Case(Box::new(translate_expression(state, e))),
     }
 }
 
-fn translate_selection_rest(state: &mut State, s: &syntax::SelectionRestStatement) -> SelectionRestStatement {
+fn translate_selection_rest(
+    state: &mut State,
+    s: &syntax::SelectionRestStatement,
+) -> SelectionRestStatement {
     match s {
-        syntax::SelectionRestStatement::Statement(s) => SelectionRestStatement::Statement(Box::new(translate_statement(state, s))),
-        syntax::SelectionRestStatement::Else(if_body, rest) => {
-            SelectionRestStatement::Else(Box::new(translate_statement(state, if_body)), Box::new(translate_statement(state, rest)))
+        syntax::SelectionRestStatement::Statement(s) => {
+            SelectionRestStatement::Statement(Box::new(translate_statement(state, s)))
         }
+        syntax::SelectionRestStatement::Else(if_body, rest) => SelectionRestStatement::Else(
+            Box::new(translate_statement(state, if_body)),
+            Box::new(translate_statement(state, rest)),
+        ),
     }
 }
 
@@ -1406,29 +1537,52 @@ fn translate_selection(state: &mut State, s: &syntax::SelectionStatement) -> Sel
 
 fn translate_simple_statement(state: &mut State, s: &syntax::SimpleStatement) -> SimpleStatement {
     match s {
-        syntax::SimpleStatement::Declaration(d) => SimpleStatement::Declaration(translate_declaration(state, d)),
-        syntax::SimpleStatement::Expression(e) => SimpleStatement::Expression(e.as_ref().map(|e| translate_expression(state, e))),
-        syntax::SimpleStatement::Iteration(i) => SimpleStatement::Iteration(translate_iteration(state, i)),
-        syntax::SimpleStatement::Selection(s) => SimpleStatement::Selection(translate_selection(state, s)),
+        syntax::SimpleStatement::Declaration(d) => {
+            SimpleStatement::Declaration(translate_declaration(state, d))
+        }
+        syntax::SimpleStatement::Expression(e) => {
+            SimpleStatement::Expression(e.as_ref().map(|e| translate_expression(state, e)))
+        }
+        syntax::SimpleStatement::Iteration(i) => {
+            SimpleStatement::Iteration(translate_iteration(state, i))
+        }
+        syntax::SimpleStatement::Selection(s) => {
+            SimpleStatement::Selection(translate_selection(state, s))
+        }
         syntax::SimpleStatement::Jump(j) => SimpleStatement::Jump(translate_jump(state, j)),
         syntax::SimpleStatement::Switch(s) => SimpleStatement::Switch(translate_switch(state, s)),
-        syntax::SimpleStatement::CaseLabel(s) => panic!("should be handled by translate_switch")
+        syntax::SimpleStatement::CaseLabel(s) => panic!("should be handled by translate_switch"),
     }
 }
 
 fn translate_statement(state: &mut State, s: &syntax::Statement) -> Statement {
     match s {
-        syntax::Statement::Compound(s) => Statement::Compound(Box::new(translate_compound_statement(state, s))),
-        syntax::Statement::Simple(s) => Statement::Simple(Box::new(translate_simple_statement(state, s)))
+        syntax::Statement::Compound(s) => {
+            Statement::Compound(Box::new(translate_compound_statement(state, s)))
+        }
+        syntax::Statement::Simple(s) => {
+            Statement::Simple(Box::new(translate_simple_statement(state, s)))
+        }
     }
 }
 
-
-fn translate_compound_statement(state: &mut State, cs: &syntax::CompoundStatement) -> CompoundStatement {
-    CompoundStatement { statement_list: cs.statement_list.iter().map(|x| translate_statement(state, x)).collect() }
+fn translate_compound_statement(
+    state: &mut State,
+    cs: &syntax::CompoundStatement,
+) -> CompoundStatement {
+    CompoundStatement {
+        statement_list: cs
+            .statement_list
+            .iter()
+            .map(|x| translate_statement(state, x))
+            .collect(),
+    }
 }
 
-fn translate_function_parameter_declarator(state: &mut State, d: &syntax::FunctionParameterDeclarator) -> FunctionParameterDeclarator {
+fn translate_function_parameter_declarator(
+    state: &mut State,
+    d: &syntax::FunctionParameterDeclarator,
+) -> FunctionParameterDeclarator {
     let mut ty: Type = lift(state, &d.ty);
     if let Some(a) = &d.ident.array_spec {
         ty.array_sizes = Some(Box::new(lift(state, a)));
@@ -1439,29 +1593,31 @@ fn translate_function_parameter_declarator(state: &mut State, d: &syntax::Functi
     }
 }
 
-fn translate_function_parameter_declaration(state: &mut State, p: &syntax::FunctionParameterDeclaration) ->
-  FunctionParameterDeclaration
-{
+fn translate_function_parameter_declaration(
+    state: &mut State,
+    p: &syntax::FunctionParameterDeclaration,
+) -> FunctionParameterDeclaration {
     match p {
         syntax::FunctionParameterDeclaration::Named(qual, p) => {
             let decl = SymDecl::Variable(
                 StorageClass::None,
-                lift(state, &p.ty)
-
-                /*syntax::FullySpecifiedType {
-                    qualifier: None,
-                    ty: TypeSpecifier {
-                        ty: p.ty.ty.clone(),
-                        array_specifier: None
-                    }
-                }*/);
+                lift(state, &p.ty), /*syntax::FullySpecifiedType {
+                                        qualifier: None,
+                                        ty: TypeSpecifier {
+                                            ty: p.ty.ty.clone(),
+                                            array_specifier: None
+                                        }
+                                    }*/
+            );
             state.declare(p.ident.ident.as_str(), decl);
-            FunctionParameterDeclaration::Named(qual.clone(), translate_function_parameter_declarator(state, p))
+            FunctionParameterDeclaration::Named(
+                qual.clone(),
+                translate_function_parameter_declarator(state, p),
+            )
         }
         syntax::FunctionParameterDeclaration::Unnamed(qual, p) => {
             FunctionParameterDeclaration::Unnamed(qual.clone(), p.clone())
         }
-
     }
 }
 
@@ -1469,112 +1625,221 @@ fn translate_prototype(state: &mut State, cs: &syntax::FunctionPrototype) -> Fun
     FunctionPrototype {
         ty: lift(state, &cs.ty),
         name: cs.name.clone(),
-        parameters: cs.parameters.iter().map(|x| translate_function_parameter_declaration(state, x)).collect(),
+        parameters: cs
+            .parameters
+            .iter()
+            .map(|x| translate_function_parameter_declaration(state, x))
+            .collect(),
     }
 }
 
-fn translate_function_definition(state: &mut State, fd: &syntax::FunctionDefinition) -> FunctionDefinition {
+fn translate_function_definition(
+    state: &mut State,
+    fd: &syntax::FunctionDefinition,
+) -> FunctionDefinition {
     let prototype = translate_prototype(state, &fd.prototype);
-    let params = prototype.parameters.iter().map(|p| match p {
-        FunctionParameterDeclaration::Named(_, p) => p.ty.clone(),
-        FunctionParameterDeclaration::Unnamed(_, p) => panic!(),
-    }).collect();
-    let sig = FunctionSignature{ ret: prototype.ty.clone(), params };
-    state.declare(fd.prototype.name.as_str(), SymDecl::Function(FunctionType{ signatures: NonEmpty::new(sig)}));
+    let params = prototype
+        .parameters
+        .iter()
+        .map(|p| match p {
+            FunctionParameterDeclaration::Named(_, p) => p.ty.clone(),
+            FunctionParameterDeclaration::Unnamed(_, p) => panic!(),
+        })
+        .collect();
+    let sig = FunctionSignature {
+        ret: prototype.ty.clone(),
+        params,
+    };
+    state.declare(
+        fd.prototype.name.as_str(),
+        SymDecl::Function(FunctionType {
+            signatures: NonEmpty::new(sig),
+        }),
+    );
     state.push_scope(fd.prototype.name.as_str().into());
     let f = FunctionDefinition {
         prototype,
-        statement: translate_compound_statement(state, &fd.statement)
+        statement: translate_compound_statement(state, &fd.statement),
     };
     state.pop_scope();
     f
 }
 
-fn translate_external_declaration(state: &mut State, ed: &syntax::ExternalDeclaration) -> ExternalDeclaration {
+fn translate_external_declaration(
+    state: &mut State,
+    ed: &syntax::ExternalDeclaration,
+) -> ExternalDeclaration {
     match ed {
-        syntax::ExternalDeclaration::Declaration(d) =>
-            ExternalDeclaration::Declaration(translate_declaration(state, d)),
-        syntax::ExternalDeclaration::FunctionDefinition(fd) =>
-            ExternalDeclaration::FunctionDefinition(translate_function_definition(state, fd)),
-        syntax::ExternalDeclaration::Preprocessor(p) =>
-            ExternalDeclaration::Preprocessor(panic!())
+        syntax::ExternalDeclaration::Declaration(d) => {
+            ExternalDeclaration::Declaration(translate_declaration(state, d))
+        }
+        syntax::ExternalDeclaration::FunctionDefinition(fd) => {
+            ExternalDeclaration::FunctionDefinition(translate_function_definition(state, fd))
+        }
+        syntax::ExternalDeclaration::Preprocessor(p) => ExternalDeclaration::Preprocessor(panic!()),
     }
 }
 
 fn declare_function(state: &mut State, name: &str, ret: Type, params: Vec<Type>) {
-    let sig = FunctionSignature{ ret, params };
+    let sig = FunctionSignature { ret, params };
     match state.lookup_sym_mut(name) {
-        Some(Symbol { decl: SymDecl::Function(f), ..}) => f.signatures.push(sig),
-        None => { state.declare(name, SymDecl::Function(FunctionType{ signatures: NonEmpty::new(sig)})); },
-        _ => panic!("overloaded function name {}", name)
+        Some(Symbol {
+            decl: SymDecl::Function(f),
+            ..
+        }) => f.signatures.push(sig),
+        None => {
+            state.declare(
+                name,
+                SymDecl::Function(FunctionType {
+                    signatures: NonEmpty::new(sig),
+                }),
+            );
+        }
+        _ => panic!("overloaded function name {}", name),
     }
     //state.declare(name, Type::Function(FunctionType{ v}))
 }
-
 
 pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> TranslationUnit {
     // global scope
     state.push_scope("global".into());
     use TypeKind::*;
-    declare_function(state, "vec3", Type::new(Vec3),
-                     vec![Type::new(Float), Type::new(Float), Type::new(Float)]);
-    declare_function(state, "vec3", Type::new(Vec3),
-                     vec![Type::new(Float)]);
-    declare_function(state, "vec3", Type::new(Vec3),
-                     vec![Type::new(Vec2), Type::new(Float)]);
-    declare_function(state, "vec4", Type::new(Vec4),
-                     vec![Type::new(Vec3), Type::new(Float)]);
-    declare_function(state, "vec4", Type::new(Vec4),
-                     vec![Type::new(Float), Type::new(Float), Type::new(Float), Type::new(Float)]);
-    declare_function(state, "vec2", Type::new(Vec2),
-                     vec![Type::new(Float)]);
-    declare_function(state, "mix", Type::new(Vec3),
-                     vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)]);
-    declare_function(state, "mix", Type::new(Vec3),
-                     vec![Type::new(Vec3), Type::new(Vec3), Type::new(Float)]);
-    declare_function(state, "mix", Type::new(Float),
-                     vec![Type::new(Float), Type::new(Float), Type::new(Float)]);
-    declare_function(state, "step", Type::new(Vec2),
-                     vec![Type::new(Vec2), Type::new(Vec2)]);
-    declare_function(state, "max", Type::new(Vec2),
-                     vec![Type::new(Vec2), Type::new(Vec2)]);
-    declare_function(state, "max", Type::new(Float),
-                     vec![Type::new(Float), Type::new(Float)]);
-    declare_function(state, "min", Type::new(Float),
-                     vec![Type::new(Float), Type::new(Float)]);
-    declare_function(state, "fwidth", Type::new(Vec2),
-                     vec![Type::new(Vec2)]);
-    declare_function(state, "clamp", Type::new(Vec3),
-                     vec![Type::new(Vec3), Type::new(Float), Type::new(Float)]);
-    declare_function(state, "clamp", Type::new(Double),
-                     vec![Type::new(Double), Type::new(Double), Type::new(Double)]);
-    declare_function(state, "clamp", Type::new(Vec3),
-                     vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)]);
+    declare_function(
+        state,
+        "vec3",
+        Type::new(Vec3),
+        vec![Type::new(Float), Type::new(Float), Type::new(Float)],
+    );
+    declare_function(state, "vec3", Type::new(Vec3), vec![Type::new(Float)]);
+    declare_function(
+        state,
+        "vec3",
+        Type::new(Vec3),
+        vec![Type::new(Vec2), Type::new(Float)],
+    );
+    declare_function(
+        state,
+        "vec4",
+        Type::new(Vec4),
+        vec![Type::new(Vec3), Type::new(Float)],
+    );
+    declare_function(
+        state,
+        "vec4",
+        Type::new(Vec4),
+        vec![
+            Type::new(Float),
+            Type::new(Float),
+            Type::new(Float),
+            Type::new(Float),
+        ],
+    );
+    declare_function(state, "vec2", Type::new(Vec2), vec![Type::new(Float)]);
+    declare_function(
+        state,
+        "mix",
+        Type::new(Vec3),
+        vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)],
+    );
+    declare_function(
+        state,
+        "mix",
+        Type::new(Vec3),
+        vec![Type::new(Vec3), Type::new(Vec3), Type::new(Float)],
+    );
+    declare_function(
+        state,
+        "mix",
+        Type::new(Float),
+        vec![Type::new(Float), Type::new(Float), Type::new(Float)],
+    );
+    declare_function(
+        state,
+        "step",
+        Type::new(Vec2),
+        vec![Type::new(Vec2), Type::new(Vec2)],
+    );
+    declare_function(
+        state,
+        "max",
+        Type::new(Vec2),
+        vec![Type::new(Vec2), Type::new(Vec2)],
+    );
+    declare_function(
+        state,
+        "max",
+        Type::new(Float),
+        vec![Type::new(Float), Type::new(Float)],
+    );
+    declare_function(
+        state,
+        "min",
+        Type::new(Float),
+        vec![Type::new(Float), Type::new(Float)],
+    );
+    declare_function(state, "fwidth", Type::new(Vec2), vec![Type::new(Vec2)]);
+    declare_function(
+        state,
+        "clamp",
+        Type::new(Vec3),
+        vec![Type::new(Vec3), Type::new(Float), Type::new(Float)],
+    );
+    declare_function(
+        state,
+        "clamp",
+        Type::new(Double),
+        vec![Type::new(Double), Type::new(Double), Type::new(Double)],
+    );
+    declare_function(
+        state,
+        "clamp",
+        Type::new(Vec3),
+        vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)],
+    );
     declare_function(state, "length", Type::new(Float), vec![Type::new(Vec2)]);
     declare_function(state, "pow", Type::new(Vec3), vec![Type::new(Vec3)]);
     declare_function(state, "pow", Type::new(Float), vec![Type::new(Float)]);
-    declare_function(state, "lessThanEqual", Type::new(BVec3),
-                     vec![Type::new(Vec3), Type::new(Vec3)]);
-    declare_function(state, "if_then_else", Type::new(Vec3),
-                     vec![Type::new(BVec3), Type::new(Vec3), Type::new(Vec3)]);
-    declare_function(state, "floor", Type::new(Vec4),
-                     vec![Type::new(Vec4)]);
-    declare_function(state, "floor", Type::new(Double),
-                     vec![Type::new(Double)]);
-    declare_function(state, "int", Type::new(Int),
-                     vec![Type::new(Float)]);
-    declare_function(state, "uint", Type::new(UInt),
-                     vec![Type::new(Float)]);
-    declare_function(state, "uint", Type::new(UInt),
-                     vec![Type::new(Int)]);
-    declare_function(state, "ivec2", Type::new(IVec2),
-                     vec![Type::new(UInt), Type::new(UInt)]);
-    declare_function(state, "ivec2", Type::new(IVec2),
-                     vec![Type::new(UInt), Type::new(UInt)]);
-    declare_function(state, "texelFetch", Type::new(Vec4),
-                     vec![Type::new(Sampler2D), Type::new(IVec2), Type::new(Int)]);
-    declare_function(state, "texture", Type::new(Vec4),
-                     vec![Type::new(Sampler2D), Type::new(Vec3)]);
+    declare_function(
+        state,
+        "lessThanEqual",
+        Type::new(BVec3),
+        vec![Type::new(Vec3), Type::new(Vec3)],
+    );
+    declare_function(
+        state,
+        "if_then_else",
+        Type::new(Vec3),
+        vec![Type::new(BVec3), Type::new(Vec3), Type::new(Vec3)],
+    );
+    declare_function(state, "floor", Type::new(Vec4), vec![Type::new(Vec4)]);
+    declare_function(state, "floor", Type::new(Double), vec![Type::new(Double)]);
+    declare_function(state, "int", Type::new(Int), vec![Type::new(Float)]);
+    declare_function(state, "uint", Type::new(UInt), vec![Type::new(Float)]);
+    declare_function(state, "uint", Type::new(UInt), vec![Type::new(Int)]);
+    declare_function(
+        state,
+        "ivec2",
+        Type::new(IVec2),
+        vec![Type::new(UInt), Type::new(UInt)],
+    );
+    declare_function(
+        state,
+        "ivec2",
+        Type::new(IVec2),
+        vec![Type::new(UInt), Type::new(UInt)],
+    );
+    declare_function(
+        state,
+        "texelFetch",
+        Type::new(Vec4),
+        vec![Type::new(Sampler2D), Type::new(IVec2), Type::new(Int)],
+    );
+    declare_function(
+        state,
+        "texture",
+        Type::new(Vec4),
+        vec![Type::new(Sampler2D), Type::new(Vec3)],
+    );
     state.declare("gl_FragCoord", SymDecl::var(Vec4));
     state.declare("gl_FragColor", SymDecl::var(Vec4));
 
