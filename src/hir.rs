@@ -1277,8 +1277,17 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
 
                 Expr { kind: ExprKind::SwizzleSelector(e, SwizzleSelector::parse(i.as_str())), ty }
             } else {
-                panic!();
-                Expr { kind: ExprKind::Dot(e, i.clone()), ty }
+                match ty.kind {
+                    TypeKind::Struct(s) => {
+                        let fields = match &state.sym(s).decl {
+                            SymDecl::Struct(fields) => fields,
+                            _ => panic!("expected struct"),
+                        };
+                        let field = fields.fields.iter().find(|x| &x.name == i).expect("missing field");
+                        Expr { kind: ExprKind::Dot(e, i.clone()), ty: field.ty.clone() }
+                    }
+                    _ => panic!("expected struct found {:?}", ty)
+                }
             }
         }
         syntax::Expr::Bracket(e, specifier) =>{
