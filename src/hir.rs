@@ -1086,7 +1086,7 @@ fn translate_declaration(state: &mut State, d: &syntax::Declaration) -> Declarat
         syntax::Declaration::FunctionPrototype(p) => Declaration::FunctionPrototype(panic!()),
         syntax::Declaration::Global(ty, ids) => Declaration::Global(panic!(), panic!()),
         syntax::Declaration::InitDeclaratorList(dl) => Declaration::InitDeclaratorList(translate_init_declarator_list(state, dl)),
-        syntax::Declaration::Precision(p, ts) => Declaration::Precision(panic!(), panic!()),
+        syntax::Declaration::Precision(p, ts) => Declaration::Precision(p.clone(), ts.clone()),
     }
 }
 
