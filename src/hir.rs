@@ -500,7 +500,7 @@ pub struct Block {
 #[derive(Clone, Debug, PartialEq)]
 pub enum FunIdentifier {
     Identifier(SymRef),
-    Expr(Box<Expr>)
+    Constructor(Type)
 }
 
 /// Function prototype.
@@ -1232,7 +1232,29 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
 
                             FunIdentifier::Identifier(sym)
                         },
-                        _ => panic!()
+                        syntax::FunIdentifier::Expr(e) => {
+                            dbg!(&e);
+                            let ty = match &**e {
+                                syntax::Expr::Bracket(i, array) => {
+                                    let kind = match &**i {
+                                        syntax::Expr::Variable(i) => {
+                                            match i.as_str() {
+                                                "vec4" => TypeKind::Vec4,
+                                                _ => panic!()
+                                            }
+                                        }
+                                        _ => panic!()
+                                    };
+
+                                    Type { kind, precision: None, array_sizes: Some(Box::new(lift(state, array)))}
+                                }
+                                _ => panic!()
+                            };
+                            ret_ty = ty.clone();
+
+                            FunIdentifier::Constructor(ty)
+
+                        }
                     },
                     params
                 ),
