@@ -1100,6 +1100,36 @@ fn is_vector(ty: &Type) -> bool {
     }
 }
 
+fn index_matrix(ty: &Type) -> Option<TypeKind> {
+    use TypeKind::*;
+    if ty.array_sizes != None {
+        return None
+    }
+    Some(match ty.kind {
+        Mat2 => Vec2,
+        Mat3 => Vec3,
+        Mat4 => Vec4,
+        Mat23 => Vec3,
+        Mat24 => Vec4,
+        Mat32 => Vec2,
+        Mat34 => Vec4,
+        Mat42 => Vec2,
+        Mat43 => Vec3,
+        DMat2 => DVec2,
+        DMat3 => DVec3,
+        DMat4 => DVec4,
+        DMat23 => DVec3,
+        DMat24 => DVec4,
+        DMat32 => DVec2,
+        DMat34 => DVec4,
+        DMat42 => DVec2,
+        DMat43 => DVec3,
+        _ => return None
+        })
+}
+
+
+
 fn is_ivec(ty: &Type) -> bool {
     match ty.kind {
         TypeKind::IVec2 | TypeKind::IVec3 | TypeKind::IVec4 => {
@@ -1340,6 +1370,8 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             let e = Box::new(translate_expression(state, e));
             let ty = if is_vector(&e.ty) {
                 Type::new(TypeKind::Float)
+            } else if let Some(ty) = index_matrix(&e.ty) {
+                Type::new(ty)
             } else {
                 let a = match &e.ty.array_sizes {
                     Some(a) => {
@@ -1351,7 +1383,7 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                             Some(Box::new(a))
                         }
                     },
-                    _ => panic!()
+                    _ => panic!("{:#?}", e)
                 };
                 Type { kind: e.ty.kind.clone(), precision: e.ty.precision.clone(), array_sizes: a }
             };
