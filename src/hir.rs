@@ -1092,7 +1092,17 @@ fn translate_declaration(state: &mut State, d: &syntax::Declaration) -> Declarat
 
 fn is_vector(ty: &Type) -> bool {
     match ty.kind {
-        TypeKind::Vec3 | TypeKind::Vec2 | TypeKind::Vec4 => {
+        TypeKind::Vec2 | TypeKind::Vec3 | TypeKind::Vec4 |
+        TypeKind::IVec2 | TypeKind::IVec3 | TypeKind::IVec4 => {
+            ty.array_sizes == None
+        }
+        _ => false
+    }
+}
+
+fn is_ivec(ty: &Type) -> bool {
+    match ty.kind {
+        TypeKind::IVec2 | TypeKind::IVec3 | TypeKind::IVec4 => {
             ty.array_sizes == None
         }
         _ => false
@@ -1301,12 +1311,13 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
         syntax::Expr::Dot(e, i) => {
             let e = Box::new(translate_expression(state, e));
             let ty = e.ty.clone();
+            let ivec = is_ivec(&ty);
             if is_vector(&ty) {
                 let ty = Type::new(match i.as_str().len() {
-                    1 => TypeKind::Float,
-                    2 => TypeKind::Vec2,
-                    3 => TypeKind::Vec3,
-                    4 => TypeKind::Vec4,
+                    1 => if ivec { TypeKind::Int } else { TypeKind::Float },
+                    2 => if ivec { TypeKind::IVec2 } else { TypeKind::Vec2 },
+                    3 => if ivec { TypeKind::IVec3 } else { TypeKind::Vec3 },
+                    4 => if ivec { TypeKind::IVec4 } else { TypeKind::Vec4 },
                     _ => panic!(),
                 });
 
