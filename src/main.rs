@@ -877,7 +877,7 @@ pub fn show_function_identifier<F>(f: &mut F, i: &syntax::FunIdentifier) where F
 pub fn show_hir_function_identifier<F>(f: &mut F, state: &mut OutputState, i: &hir::FunIdentifier) where F: Write {
   match *i {
     hir::FunIdentifier::Identifier(ref n) => show_sym(f, state, n),
-    hir::FunIdentifier::Expr(ref e) => show_hir_expr(f, state, &*e)
+    hir::FunIdentifier::Constructor(ref t) => show_type(f, state, t)
   }
 }
 

@@ -1093,7 +1093,7 @@ fn translate_declaration(state: &mut State, d: &syntax::Declaration) -> Declarat
 fn is_vector(ty: &Type) -> bool {
     match ty.kind {
         TypeKind::Vec3 | TypeKind::Vec2 | TypeKind::Vec4 => {
-            true
+            ty.array_sizes == None
         }
         _ => false
     }
@@ -1308,7 +1308,7 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                         let field = fields.fields.iter().find(|x| &x.name == i).expect("missing field");
                         Expr { kind: ExprKind::Dot(e, i.clone()), ty: field.ty.clone() }
                     }
-                    _ => panic!("expected struct found {:?}", ty)
+                    _ => panic!("expected struct found {:#?} {:#?}", e, ty)
                 }
             }
         }
@@ -1317,8 +1317,19 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             let ty = if is_vector(&e.ty) {
                 Type::new(TypeKind::Float)
             } else {
-                assert!(e.ty.array_sizes.is_some());
-                e.ty.clone()
+                let a = match &e.ty.array_sizes {
+                    Some(a) => {
+                        let mut a = *a.clone();
+                        a.sizes.pop();
+                        if a.sizes.len() == 0 {
+                            None
+                        } else {
+                            Some(Box::new(a))
+                        }
+                    },
+                    _ => panic!()
+                };
+                Type { kind: e.ty.kind.clone(), precision: e.ty.precision.clone(), array_sizes: a }
             };
             let indx = match specifier {
                 ArraySpecifier::Unsized => panic!("need expression"),
