@@ -1166,6 +1166,8 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             } else {
                 promoted_type(&lhs.ty, &rhs.ty)
             };
+
+            // comparison operators have a bool result
             let ty = match op {
                 BinaryOp::Equal |
                 BinaryOp::GT |
@@ -1174,6 +1176,8 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                 BinaryOp::LTE => Type::new(TypeKind::Bool),
                 _ => ty
             };
+
+
             Expr { kind: ExprKind::Binary(op.clone(), lhs, rhs), ty}
         }
         syntax::Expr::Unary(op, e) => {
