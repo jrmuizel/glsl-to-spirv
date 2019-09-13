@@ -1107,7 +1107,7 @@ fn compatible_type(lhs: &Type, rhs: &Type) -> bool {
         lhs == &Type::new(TypeKind::Float) {
         true
     } else {
-        lhs == rhs
+        lhs.kind == rhs.kind && lhs.array_sizes == rhs.array_sizes
     }
 }
 
@@ -1219,7 +1219,7 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                                         Some(t) => t,
                                         None => {
                                             dbg!(&fn_ty.signatures);
-                                            dbg!(params.iter().map(|p| &p.ty).collect::<Vec<_>>());
+                                            dbg!(params.iter().map(|p| p).collect::<Vec<_>>());
                                             panic!("no matching func {}", i.as_str())
                                         }
                                     };
@@ -1537,6 +1537,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Float), Type::new(Float), Type::new(Float), Type::new(Float)]);
     declare_function(state, "vec2", Type::new(Vec2),
                      vec![Type::new(Float)]);
+    declare_function(state, "min", Type::new(Vec2),
+                     vec![Type::new(Vec2), Type::new(Vec2)]);
     declare_function(state, "mix", Type::new(Vec3),
                      vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "mix", Type::new(Vec3),
@@ -1572,6 +1574,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Double)]);
     declare_function(state, "int", Type::new(Int),
                      vec![Type::new(Float)]);
+    declare_function(state, "int", Type::new(Int),
+                     vec![Type::new(UInt)]);
     declare_function(state, "uint", Type::new(UInt),
                      vec![Type::new(Float)]);
     declare_function(state, "uint", Type::new(UInt),
@@ -1579,7 +1583,7 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
     declare_function(state, "ivec2", Type::new(IVec2),
                      vec![Type::new(UInt), Type::new(UInt)]);
     declare_function(state, "ivec2", Type::new(IVec2),
-                     vec![Type::new(UInt), Type::new(UInt)]);
+                     vec![Type::new(Int), Type::new(Int)]);
     declare_function(state, "texelFetch", Type::new(Vec4),
                      vec![Type::new(Sampler2D), Type::new(IVec2), Type::new(Int)]);
     declare_function(state, "texture", Type::new(Vec4),
