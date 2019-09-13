@@ -1148,7 +1148,9 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
         syntax::Expr::Assignment(lhs, op, rhs) => {
             let lhs = Box::new(translate_expression(state, lhs));
             let rhs = Box::new(translate_expression(state, rhs));
-            assert!(compatible_type(&lhs.ty, &rhs.ty));
+            if !compatible_type(&lhs.ty, &rhs.ty) {
+                panic!("incompatible {:?} {:?}", lhs, rhs)
+            }
             let ty = lhs.ty.clone();
             Expr { kind: ExprKind::Assignment(lhs, op.clone(), rhs), ty }
         }
@@ -1163,6 +1165,14 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                 }
             } else {
                 promoted_type(&lhs.ty, &rhs.ty)
+            };
+            let ty = match op {
+                BinaryOp::Equal |
+                BinaryOp::GT |
+                BinaryOp::GTE |
+                BinaryOp::LT |
+                BinaryOp::LTE => Type::new(TypeKind::Bool),
+                _ => ty
             };
             Expr { kind: ExprKind::Binary(op.clone(), lhs, rhs), ty}
         }
@@ -1233,7 +1243,6 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                             FunIdentifier::Identifier(sym)
                         },
                         syntax::FunIdentifier::Expr(e) => {
-                            dbg!(&e);
                             let ty = match &**e {
                                 syntax::Expr::Bracket(i, array) => {
                                     let kind = match &**i {
@@ -1572,6 +1581,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Float)]);
     declare_function(state, "min", Type::new(Vec2),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "mix", Type::new(Vec2),
+                     vec![Type::new(Vec2), Type::new(Vec2), Type::new(Vec2)]);
     declare_function(state, "mix", Type::new(Vec3),
                      vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "mix", Type::new(Vec3),
