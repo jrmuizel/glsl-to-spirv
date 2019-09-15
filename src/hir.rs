@@ -538,6 +538,7 @@ pub struct InitDeclaratorList {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SingleDeclaration {
     pub ty: Type,
+    pub ty_def: Option<SymRef>,
     pub qualifier: Option<TypeQualifier>,
     pub name: Option<SymRef>,
     pub initializer: Option<Initializer>
@@ -1025,12 +1026,16 @@ fn translate_initializater(state: &mut State, i: &syntax::Initializer) -> Initia
 fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration) -> SingleDeclaration {
     let mut ty = d.ty.clone();
     ty.ty.array_specifier = d.array_specifier.clone();
-    let sym = match &ty.ty.ty {
+    let ty_def = match &ty.ty.ty {
         TypeSpecifierNonArray::Struct(s) => {
             let decl = SymDecl::Struct(lift(state, s));
-            state.declare(s.name.as_ref().unwrap().as_str(), decl)
+            Some(state.declare(s.name.as_ref().unwrap().as_str(), decl))
         }
-        _ => {
+        _ => None
+    };
+
+    let name = match d.name.as_ref() {
+        Some(name) => {
             let mut storage = StorageClass::None;
             for qual in ty.qualifier.iter().flat_map(|x| x.qualifiers.0.iter()) {
                 match qual {
@@ -1052,8 +1057,9 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
                 }
             }
             let decl = SymDecl::Variable(storage, lift(state, &ty));
-            state.declare(d.name.as_ref().unwrap().as_str(), decl)
+            Some(state.declare(d.name.as_ref().unwrap().as_str(), decl))
         }
+        None => None
     };
 
     let mut ty: Type = lift(state, &ty);
@@ -1063,8 +1069,9 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
 
     SingleDeclaration {
         qualifier: d.ty.qualifier.clone(),
-        name: d.name.as_ref().and(Some(sym)),
+        name,
         ty,
+        ty_def,
         initializer: d.initializer.as_ref().map(|x| translate_initializater(state, x)),
     }
 }
