@@ -2,7 +2,7 @@ use std::iter::{FromIterator, once};
 use std::ops::{Deref, DerefMut};
 use std::collections::HashMap;
 
-use glsl::syntax::{NonEmpty, TypeQualifier, TypeSpecifier, TypeSpecifierNonArray};
+use glsl::syntax::{NonEmpty, TypeSpecifier, TypeSpecifierNonArray};
 use glsl::syntax;
 use glsl::syntax::StructFieldSpecifier;
 use glsl::syntax::PrecisionQualifier;
@@ -361,7 +361,7 @@ pub struct StructField {
     pub name: syntax::Identifier,
 }
 
-fn get_precision(qualifiers: Option<TypeQualifier>) -> Option<PrecisionQualifier>{
+fn get_precision(qualifiers: Option<syntax::TypeQualifier>) -> Option<PrecisionQualifier>{
     let mut precision = None;
     for qual in qualifiers.iter().flat_map(|x| x.qualifiers.0.iter()) {
         match qual {
@@ -533,6 +533,41 @@ pub struct InitDeclaratorList {
     pub head: SingleDeclaration,
     pub tail: Vec<SingleDeclarationNoType>
 }
+
+/// Type qualifier.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypeQualifier {
+    pub qualifiers: NonEmpty<TypeQualifierSpec>
+}
+
+impl LiftFrom<&Option<syntax::TypeQualifier>> for Option<TypeQualifier> {
+    fn lift(state: &mut State, q: &Option<syntax::TypeQualifier>) -> Option<TypeQualifier> {
+        q.as_ref().and_then(|x| {
+            NonEmpty::from_iter(x.qualifiers.0.iter().flat_map(|x| {
+                match x {
+                    syntax::TypeQualifierSpec::Precision(_) => None,
+                    syntax::TypeQualifierSpec::Interpolation(i) => Some(TypeQualifierSpec::Interpolation(i.clone())),
+                    syntax::TypeQualifierSpec::Invariant => Some(TypeQualifierSpec::Invariant),
+                    syntax::TypeQualifierSpec::Layout(l) => Some(TypeQualifierSpec::Layout(l.clone())),
+                    syntax::TypeQualifierSpec::Precise => Some(TypeQualifierSpec::Precise),
+                    syntax::TypeQualifierSpec::Storage(s) => Some(TypeQualifierSpec::Storage(s.clone()))
+
+                }
+            })).map(|x| TypeQualifier{ qualifiers: x})
+        })
+    }
+}
+
+/// Type qualifier spec.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypeQualifierSpec {
+    Storage(syntax::StorageQualifier),
+    Layout(syntax::LayoutQualifier),
+    Interpolation(syntax::InterpolationQualifier),
+    Invariant,
+    Precise
+}
+
 
 /// Single declaration.
 #[derive(Clone, Debug, PartialEq)]
@@ -1068,7 +1103,7 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
     }
 
     SingleDeclaration {
-        qualifier: d.ty.qualifier.clone(),
+        qualifier: lift(state, &d.ty.qualifier),
         name,
         ty,
         ty_def,
@@ -1561,10 +1596,10 @@ fn translate_function_parameter_declaration(state: &mut State, p: &syntax::Funct
                     }
                 }*/);
             state.declare(p.ident.ident.as_str(), decl);
-            FunctionParameterDeclaration::Named(qual.clone(), translate_function_parameter_declarator(state, p))
+            FunctionParameterDeclaration::Named(lift(state, qual), translate_function_parameter_declarator(state, p))
         }
         syntax::FunctionParameterDeclaration::Unnamed(qual, p) => {
-            FunctionParameterDeclaration::Unnamed(qual.clone(), p.clone())
+            FunctionParameterDeclaration::Unnamed(lift(state, qual), p.clone())
         }
 
     }

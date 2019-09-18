@@ -359,7 +359,7 @@ pub fn show_arrayed_identifier<F>(f: &mut F, ident: &syntax::Identifier, ty: &hi
   }
 }
 
-pub fn show_type_qualifier<F>(f: &mut F, q: &syntax::TypeQualifier) where F: Write {
+pub fn show_type_qualifier<F>(f: &mut F, q: &hir::TypeQualifier) where F: Write {
   let mut qualifiers = q.qualifiers.0.iter();
   let first = qualifiers.next().unwrap();
 
@@ -371,14 +371,13 @@ pub fn show_type_qualifier<F>(f: &mut F, q: &syntax::TypeQualifier) where F: Wri
   }
 }
 
-pub fn show_type_qualifier_spec<F>(f: &mut F, q: &syntax::TypeQualifierSpec) where F: Write {
+pub fn show_type_qualifier_spec<F>(f: &mut F, q: &hir::TypeQualifierSpec) where F: Write {
   match *q {
-    syntax::TypeQualifierSpec::Storage(ref s) => show_storage_qualifier(f, &s),
-    syntax::TypeQualifierSpec::Layout(ref l) => show_layout_qualifier(f, &l),
-    syntax::TypeQualifierSpec::Precision(ref p) => show_precision_qualifier(f, &p),
-    syntax::TypeQualifierSpec::Interpolation(ref i) => show_interpolation_qualifier(f, &i),
-    syntax::TypeQualifierSpec::Invariant => { let _ = f.write_str("invariant"); },
-    syntax::TypeQualifierSpec::Precise => { let _ = f.write_str("precise"); }
+    hir::TypeQualifierSpec::Storage(ref s) => show_storage_qualifier(f, &s),
+    hir::TypeQualifierSpec::Layout(ref l) => show_layout_qualifier(f, &l),
+    hir::TypeQualifierSpec::Interpolation(ref i) => show_interpolation_qualifier(f, &i),
+    hir::TypeQualifierSpec::Invariant => { let _ = f.write_str("invariant"); },
+    hir::TypeQualifierSpec::Precise => { let _ = f.write_str("precise"); }
   }
 }
 
