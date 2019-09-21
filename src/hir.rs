@@ -322,7 +322,7 @@ pub struct Type {
 }
 
 impl Type {
-    fn new(kind: TypeKind) -> Self {
+    pub fn new(kind: TypeKind) -> Self {
         Type { kind, precision: None, array_sizes: None }
     }
 }
