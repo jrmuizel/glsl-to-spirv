@@ -46,6 +46,7 @@ pub struct FunctionType {
 #[derive(Clone, Debug, PartialEq)]
 pub enum StorageClass {
     None,
+    Const,
     In,
     Out,
     Uniform,
@@ -530,6 +531,7 @@ pub struct FunctionParameterDeclarator {
 pub struct InitDeclaratorList {
     // XXX it feels like separating out the type and the names is better than
     // head and tail
+    // Also, it might be nice to separate out type definitions from name definitions
     pub head: SingleDeclaration,
     pub tail: Vec<SingleDeclarationNoType>
 }
@@ -540,31 +542,70 @@ pub struct TypeQualifier {
     pub qualifiers: NonEmpty<TypeQualifierSpec>
 }
 
-impl LiftFrom<&Option<syntax::TypeQualifier>> for Option<TypeQualifier> {
-    fn lift(state: &mut State, q: &Option<syntax::TypeQualifier>) -> Option<TypeQualifier> {
-        q.as_ref().and_then(|x| {
-            NonEmpty::from_iter(x.qualifiers.0.iter().flat_map(|x| {
-                match x {
-                    syntax::TypeQualifierSpec::Precision(_) => None,
-                    syntax::TypeQualifierSpec::Interpolation(i) => Some(TypeQualifierSpec::Interpolation(i.clone())),
-                    syntax::TypeQualifierSpec::Invariant => Some(TypeQualifierSpec::Invariant),
-                    syntax::TypeQualifierSpec::Layout(l) => Some(TypeQualifierSpec::Layout(l.clone())),
-                    syntax::TypeQualifierSpec::Precise => Some(TypeQualifierSpec::Precise),
-                    syntax::TypeQualifierSpec::Storage(s) => Some(TypeQualifierSpec::Storage(s.clone()))
+fn lift_type_qualifier_for_declaration(state: &mut State, q: &Option<syntax::TypeQualifier>) -> Option<TypeQualifier> {
+    q.as_ref().and_then(|x| {
+        NonEmpty::from_iter(x.qualifiers.0.iter().flat_map(|x| {
+            match x {
+                syntax::TypeQualifierSpec::Precision(_) => None,
+                syntax::TypeQualifierSpec::Interpolation(i) => Some(TypeQualifierSpec::Interpolation(i.clone())),
+                syntax::TypeQualifierSpec::Invariant => Some(TypeQualifierSpec::Invariant),
+                syntax::TypeQualifierSpec::Layout(l) => Some(TypeQualifierSpec::Layout(l.clone())),
+                syntax::TypeQualifierSpec::Precise => Some(TypeQualifierSpec::Precise),
+                syntax::TypeQualifierSpec::Storage(s) => None,
+            }
+        })).map(|x| TypeQualifier{ qualifiers: x})
+    })
+}
 
+fn lift_type_qualifier_for_parameter(state: &mut State, q: &Option<syntax::TypeQualifier>) -> Option<TypeQualifier> {
+    q.as_ref().and_then(|x| {
+        NonEmpty::from_iter(x.qualifiers.0.iter().flat_map(|x| {
+            match x {
+                syntax::TypeQualifierSpec::Precision(_) => None,
+                syntax::TypeQualifierSpec::Interpolation(i) => Some(TypeQualifierSpec::Interpolation(i.clone())),
+                syntax::TypeQualifierSpec::Invariant => Some(TypeQualifierSpec::Invariant),
+                syntax::TypeQualifierSpec::Layout(l) => Some(TypeQualifierSpec::Layout(l.clone())),
+                syntax::TypeQualifierSpec::Precise => Some(TypeQualifierSpec::Precise),
+                syntax::TypeQualifierSpec::Storage(s) => {
+                    match s {
+                        syntax::StorageQualifier::Const => Some(TypeQualifierSpec::Parameter(ParameterQualifier::Const)),
+                        syntax::StorageQualifier::In => Some(TypeQualifierSpec::Parameter(ParameterQualifier::In)),
+                        syntax::StorageQualifier::Out => Some(TypeQualifierSpec::Parameter(ParameterQualifier::Out)),
+                        syntax::StorageQualifier::InOut => Some(TypeQualifierSpec::Parameter(ParameterQualifier::InOut)),
+                        _ => panic!("Bad type qualifier for parameter")
+                    }
                 }
-            })).map(|x| TypeQualifier{ qualifiers: x})
-        })
-    }
+
+            }
+        })).map(|x| TypeQualifier{ qualifiers: x})
+    })
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ParameterQualifier {
+    Const,
+    In,
+    InOut,
+    Out,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum MemoryQualifier {
+    Coherent,
+    Volatile,
+    Restrict,
+    ReadOnly,
+    WriteOnly,
 }
 
 /// Type qualifier spec.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TypeQualifierSpec {
-    Storage(syntax::StorageQualifier),
     Layout(syntax::LayoutQualifier),
     Interpolation(syntax::InterpolationQualifier),
     Invariant,
+    Parameter(ParameterQualifier),
+    Memory(MemoryQualifier),
     Precise
 }
 
@@ -1085,6 +1126,9 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
                             (StorageClass::None, syntax::StorageQualifier::Uniform) => {
                                 storage = StorageClass::Uniform
                             }
+                            (StorageClass::None, syntax::StorageQualifier::Const) => {
+                                storage = StorageClass::Const
+                            }
                             _ => panic!("bad storage {:?}", (storage, s))
                         }
                     }
@@ -1103,7 +1147,7 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
     }
 
     SingleDeclaration {
-        qualifier: lift(state, &d.ty.qualifier),
+        qualifier: lift_type_qualifier_for_declaration(state, &d.ty.qualifier),
         name,
         ty,
         ty_def,
@@ -1596,10 +1640,10 @@ fn translate_function_parameter_declaration(state: &mut State, p: &syntax::Funct
                     }
                 }*/);
             state.declare(p.ident.ident.as_str(), decl);
-            FunctionParameterDeclaration::Named(lift(state, qual), translate_function_parameter_declarator(state, p))
+            FunctionParameterDeclaration::Named(lift_type_qualifier_for_parameter(state, qual), translate_function_parameter_declarator(state, p))
         }
         syntax::FunctionParameterDeclaration::Unnamed(qual, p) => {
-            FunctionParameterDeclaration::Unnamed(lift(state, qual), p.clone())
+            FunctionParameterDeclaration::Unnamed(lift_type_qualifier_for_parameter(state, qual), p.clone())
         }
 
     }

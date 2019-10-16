@@ -373,11 +373,12 @@ pub fn show_type_qualifier<F>(f: &mut F, q: &hir::TypeQualifier) where F: Write 
 
 pub fn show_type_qualifier_spec<F>(f: &mut F, q: &hir::TypeQualifierSpec) where F: Write {
   match *q {
-    hir::TypeQualifierSpec::Storage(ref s) => show_storage_qualifier(f, &s),
     hir::TypeQualifierSpec::Layout(ref l) => show_layout_qualifier(f, &l),
     hir::TypeQualifierSpec::Interpolation(ref i) => show_interpolation_qualifier(f, &i),
     hir::TypeQualifierSpec::Invariant => { let _ = f.write_str("invariant"); },
     hir::TypeQualifierSpec::Precise => { let _ = f.write_str("precise"); }
+    hir::TypeQualifierSpec::Memory(_) => { panic!() }
+    hir::TypeQualifierSpec::Parameter(_) => { panic!() }
   }
 }
 
@@ -997,6 +998,7 @@ pub fn translate_single_declaration(state: &mut OutputState, d: &hir::SingleDecl
   let storage = match &state.hir.sym(d.name.unwrap()).decl {
     hir::SymDecl::Variable(storage, _) => {
       match storage {
+        hir::StorageClass::Const => spirv::StorageClass::UniformConstant,
         hir::StorageClass::Out => spirv::StorageClass::Output,
         hir::StorageClass::In => spirv::StorageClass::Input,
         hir::StorageClass::Uniform => spirv::StorageClass::Uniform,
