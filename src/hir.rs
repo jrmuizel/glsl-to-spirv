@@ -1615,9 +1615,15 @@ fn translate_prototype(state: &mut State, cs: &syntax::FunctionPrototype) -> Fun
 
 fn translate_function_definition(state: &mut State, fd: &syntax::FunctionDefinition) -> FunctionDefinition {
     let prototype = translate_prototype(state, &fd.prototype);
-    let params = prototype.parameters.iter().map(|p| match p {
-        FunctionParameterDeclaration::Named(_, p) => p.ty.clone(),
-        FunctionParameterDeclaration::Unnamed(_, p) => panic!(),
+    let params = prototype.parameters.iter().flat_map(|p| match p {
+        FunctionParameterDeclaration::Named(_, p) => Some(p.ty.clone()),
+        FunctionParameterDeclaration::Unnamed(_, p) => match p.ty {
+            TypeSpecifierNonArray::Void => {
+                // just drop void parameters
+                None
+            },
+            _ => panic!() // other unnamed parameters are no good
+        },
     }).collect();
     let sig = FunctionSignature{ ret: prototype.ty.clone(), params };
     state.declare(fd.prototype.name.as_str(), SymDecl::Function(FunctionType{ signatures: NonEmpty::new(sig)}));
