@@ -1727,6 +1727,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Sampler2D), Type::new(IVec2), Type::new(Int)]);
     declare_function(state, "texture", Type::new(Vec4),
                      vec![Type::new(Sampler2D), Type::new(Vec3)]);
+    declare_function(state, "texture", Type::new(Vec4),
+                     vec![Type::new(Sampler2D), Type::new(Vec2)]);
     state.declare("gl_FragCoord", SymDecl::var(Vec4));
     state.declare("gl_FragColor", SymDecl::var(Vec4));
 
