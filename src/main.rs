@@ -925,6 +925,9 @@ pub fn show_declaration<F>(f: &mut F, state: &mut OutputState, d: &hir::Declarat
 
       let _ = f.write_str(";\n");
     }
+    hir::Declaration::StructDefinition(sym) => {
+      panic!()
+    }
   }
 }
 
@@ -995,7 +998,7 @@ pub fn translate_single_declaration(state: &mut OutputState, d: &hir::SingleDecl
 
   let ty = emit_type(state, &d.ty);
 
-  let storage = match &state.hir.sym(d.name.unwrap()).decl {
+  let storage = match &state.hir.sym(d.name).decl {
     hir::SymDecl::Variable(storage, _) => {
       match storage {
         hir::StorageClass::Const => spirv::StorageClass::UniformConstant,
@@ -1009,7 +1012,7 @@ pub fn translate_single_declaration(state: &mut OutputState, d: &hir::SingleDecl
   };
 
   let output_var = state.builder.variable(ty, None, storage, None);
-  state.emitted_syms.insert(d.name.unwrap(),  Variable{ location: output_var, ty });
+  state.emitted_syms.insert(d.name,  Variable{ location: output_var, ty });
 
   if let Some(ref initializer) = d.initializer {
     let init_val = translate_initializer(state, initializer);
@@ -1028,10 +1031,8 @@ pub fn translate_init_declarator_list(state: &mut OutputState, i: &hir::InitDecl
 pub fn show_single_declaration<F>(f: &mut F, state: &mut OutputState, d: &hir::SingleDeclaration) where F: Write {
   //show_fully_specified_type(f, state, &d.ty);
 
-  if let Some(ref name) = d.name {
-    let _ = f.write_str(" ");
-    show_sym(f, state, name);
-  }
+  let _ = f.write_str(" ");
+  show_sym(f, state, &d.name);
 
   /*if let Some(ref arr_spec) = d.array_specifier {
     show_array_spec(f, arr_spec);

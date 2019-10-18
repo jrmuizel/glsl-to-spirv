@@ -481,6 +481,7 @@ impl State {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Declaration {
     FunctionPrototype(FunctionPrototype),
+    StructDefinition(SymRef),
     InitDeclaratorList(InitDeclaratorList),
     Precision(PrecisionQualifier, TypeSpecifier),
     Block(Block),
@@ -616,7 +617,7 @@ pub struct SingleDeclaration {
     pub ty: Type,
     pub ty_def: Option<SymRef>,
     pub qualifier: Option<TypeQualifier>,
-    pub name: Option<SymRef>,
+    pub name: SymRef,
     pub initializer: Option<Initializer>
 }
 
@@ -1099,6 +1100,21 @@ fn translate_initializater(state: &mut State, i: &syntax::Initializer) -> Initia
     }
 }
 
+fn translate_struct_declaration(state: &mut State, d: &syntax::SingleDeclaration) -> Declaration {
+    let mut ty = d.ty.clone();
+    let ty_def = match &ty.ty.ty {
+        TypeSpecifierNonArray::Struct(s) => {
+            let decl = SymDecl::Struct(lift(state, s));
+            Some(state.declare(s.name.as_ref().unwrap().as_str(), decl))
+        }
+        _ => None
+    };
+
+    let ty_def = ty_def.expect("Must be type definition");
+
+    Declaration::StructDefinition(ty_def)
+}
+
 fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration) -> SingleDeclaration {
     let mut ty = d.ty.clone();
     ty.ty.array_specifier = d.array_specifier.clone();
@@ -1148,7 +1164,7 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
 
     SingleDeclaration {
         qualifier: lift_type_qualifier_for_declaration(state, &d.ty.qualifier),
-        name,
+        name: name.expect("must have name"),
         ty,
         ty_def,
         initializer: d.initializer.as_ref().map(|x| translate_initializater(state, x)),
@@ -1159,11 +1175,19 @@ fn translate_single_declaration_no_type(state: &mut State, d: &syntax::SingleDec
     panic!()
 }
 
-fn translate_init_declarator_list(state: &mut State, l: &syntax::InitDeclaratorList) -> InitDeclaratorList {
-    InitDeclaratorList {
-        head: translate_single_declaration(state, &l.head),
-        tail: l.tail.iter().map(|x| translate_single_declaration_no_type(state, x)).collect()
+fn translate_init_declarator_list(state: &mut State, l: &syntax::InitDeclaratorList) -> Declaration {
+    match &l.head.name {
+        Some(name) => {
+            Declaration::InitDeclaratorList(InitDeclaratorList {
+                head: translate_single_declaration(state, &l.head),
+                tail: l.tail.iter().map(|x| translate_single_declaration_no_type(state, x)).collect()
+            })
+        }
+        None => {
+            translate_struct_declaration(state, &l.head)
+        }
     }
+
 }
 
 fn translate_declaration(state: &mut State, d: &syntax::Declaration) -> Declaration {
@@ -1171,7 +1195,7 @@ fn translate_declaration(state: &mut State, d: &syntax::Declaration) -> Declarat
         syntax::Declaration::Block(b) => Declaration::Block(panic!()),
         syntax::Declaration::FunctionPrototype(p) => Declaration::FunctionPrototype(panic!()),
         syntax::Declaration::Global(ty, ids) => Declaration::Global(panic!(), panic!()),
-        syntax::Declaration::InitDeclaratorList(dl) => Declaration::InitDeclaratorList(translate_init_declarator_list(state, dl)),
+        syntax::Declaration::InitDeclaratorList(dl) => translate_init_declarator_list(state, dl),
         syntax::Declaration::Precision(p, ts) => Declaration::Precision(p.clone(), ts.clone()),
     }
 }
