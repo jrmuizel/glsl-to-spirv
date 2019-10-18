@@ -1126,10 +1126,15 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
         _ => None
     };
 
+    let mut ty: Type = lift(state, &d.ty);
+    if let Some(array) = &d.array_specifier {
+        ty.array_sizes = Some(Box::new(lift(state, array)))
+    }
+
     let name = match d.name.as_ref() {
         Some(name) => {
             let mut storage = StorageClass::None;
-            for qual in ty.qualifier.iter().flat_map(|x| x.qualifiers.0.iter()) {
+            for qual in d.ty.qualifier.iter().flat_map(|x| x.qualifiers.0.iter()) {
                 match qual {
                     syntax::TypeQualifierSpec::Storage(s) => {
                         match (&storage, s) {
@@ -1151,16 +1156,13 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
                     _ => {}
                 }
             }
-            let decl = SymDecl::Variable(storage, lift(state, &ty));
+            let decl = SymDecl::Variable(storage, ty.clone());
             Some(state.declare(d.name.as_ref().unwrap().as_str(), decl))
         }
         None => None
     };
 
-    let mut ty: Type = lift(state, &ty);
-    if let Some(array) = &d.array_specifier {
-        ty.array_sizes = Some(Box::new(lift(state, array)))
-    }
+
 
     SingleDeclaration {
         qualifier: lift_type_qualifier_for_declaration(state, &d.ty.qualifier),
@@ -1193,7 +1195,7 @@ fn translate_init_declarator_list(state: &mut State, l: &syntax::InitDeclaratorL
 fn translate_declaration(state: &mut State, d: &syntax::Declaration) -> Declaration {
     match d {
         syntax::Declaration::Block(b) => Declaration::Block(panic!()),
-        syntax::Declaration::FunctionPrototype(p) => Declaration::FunctionPrototype(panic!()),
+        syntax::Declaration::FunctionPrototype(p) => Declaration::FunctionPrototype(translate_prototype(state, p)),
         syntax::Declaration::Global(ty, ids) => Declaration::Global(panic!(), panic!()),
         syntax::Declaration::InitDeclaratorList(dl) => translate_init_declarator_list(state, dl),
         syntax::Declaration::Precision(p, ts) => Declaration::Precision(p.clone(), ts.clone()),
@@ -1821,6 +1823,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(UInt), Type::new(UInt)]);
     declare_function(state, "ivec2", Type::new(IVec2),
                      vec![Type::new(Int), Type::new(Int)]);
+    declare_function(state, "ivec4", Type::new(IVec4),
+                     vec![Type::new(Int), Type::new(Int), Type::new(Int), Type::new(Int)]);
     declare_function(state, "texelFetch", Type::new(Vec4),
                      vec![Type::new(Sampler2D), Type::new(IVec2), Type::new(Int)]);
     declare_function(state, "texelFetch", Type::new(IVec4),
