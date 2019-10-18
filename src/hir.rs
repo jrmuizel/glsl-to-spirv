@@ -1276,12 +1276,18 @@ fn promoted_type(lhs: &Type, rhs: &Type) -> Type {
     } else if lhs == &Type::new(TypeKind::Float) &&
         rhs == &Type::new(TypeKind::Double) {
         Type::new(TypeKind::Double)
-    } else if is_vector(&lhs) && (rhs == &Type::new(TypeKind::Float) ||
-        rhs == &Type::new(TypeKind::Double)) {
+    } else if is_vector(&lhs) && (
+        rhs == &Type::new(TypeKind::Float) ||
+        rhs == &Type::new(TypeKind::Double) ||
+        rhs == &Type::new(TypeKind::Int)
+    ) {
         // scalars promote to vectors
         lhs.clone()
-    } else if is_vector(&rhs) && (lhs == &Type::new(TypeKind::Float) ||
-        lhs == &Type::new(TypeKind::Double)) {
+    } else if is_vector(&rhs) && (
+        lhs == &Type::new(TypeKind::Float) ||
+        lhs == &Type::new(TypeKind::Double) ||
+        lhs == &Type::new(TypeKind::Int)
+    ) {
         // scalars promote to vectors
         rhs.clone()
     } else {
