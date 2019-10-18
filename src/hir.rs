@@ -1195,7 +1195,7 @@ fn translate_init_declarator_list(state: &mut State, l: &syntax::InitDeclaratorL
 fn translate_declaration(state: &mut State, d: &syntax::Declaration) -> Declaration {
     match d {
         syntax::Declaration::Block(b) => Declaration::Block(panic!()),
-        syntax::Declaration::FunctionPrototype(p) => Declaration::FunctionPrototype(translate_prototype(state, p)),
+        syntax::Declaration::FunctionPrototype(p) => Declaration::FunctionPrototype(translate_function_prototype(state, p)),
         syntax::Declaration::Global(ty, ids) => Declaration::Global(panic!(), panic!()),
         syntax::Declaration::InitDeclaratorList(dl) => translate_init_declarator_list(state, dl),
         syntax::Declaration::Precision(p, ts) => Declaration::Precision(p.clone(), ts.clone()),
@@ -1697,6 +1697,24 @@ fn translate_prototype(state: &mut State, cs: &syntax::FunctionPrototype) -> Fun
     }
 }
 
+fn translate_function_prototype(state: &mut State, prototype: &syntax::FunctionPrototype) -> FunctionPrototype {
+    let prototype = translate_prototype(state, prototype);
+    let params = prototype.parameters.iter().flat_map(|p| match p {
+        FunctionParameterDeclaration::Named(_, p) => Some(p.ty.clone()),
+        FunctionParameterDeclaration::Unnamed(_, p) => match p.ty {
+            TypeSpecifierNonArray::Void => {
+                // just drop void parameters
+                None
+            },
+            _ => panic!() // other unnamed parameters are no good
+        },
+    }).collect();
+    let sig = FunctionSignature{ ret: prototype.ty.clone(), params };
+    state.declare(prototype.name.as_str(), SymDecl::Function(FunctionType{ signatures: NonEmpty::new(sig)}));
+    prototype
+}
+
+
 fn translate_function_definition(state: &mut State, fd: &syntax::FunctionDefinition) -> FunctionDefinition {
     let prototype = translate_prototype(state, &fd.prototype);
     let params = prototype.parameters.iter().flat_map(|p| match p {
@@ -1711,6 +1729,7 @@ fn translate_function_definition(state: &mut State, fd: &syntax::FunctionDefinit
     }).collect();
     let sig = FunctionSignature{ ret: prototype.ty.clone(), params };
     state.declare(fd.prototype.name.as_str(), SymDecl::Function(FunctionType{ signatures: NonEmpty::new(sig)}));
+
     state.push_scope(fd.prototype.name.as_str().into());
     let f = FunctionDefinition {
         prototype,
