@@ -1256,6 +1256,12 @@ fn compatible_type(lhs: &Type, rhs: &Type) -> bool {
     } else if rhs == &Type::new(TypeKind::Double) &&
         lhs == &Type::new(TypeKind::Float) {
         true
+    } else if rhs == &Type::new(TypeKind::Int) &&
+        lhs == &Type::new(TypeKind::Float) {
+        true
+    } else if rhs == &Type::new(TypeKind::Float) &&
+        lhs == &Type::new(TypeKind::Int) {
+        true
     } else {
         lhs.kind == rhs.kind && lhs.array_sizes == rhs.array_sizes
     }
@@ -1310,6 +1316,8 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
             let ty = if op == &BinaryOp::Mult {
                 if lhs.ty.kind == TypeKind::Mat3 && rhs.ty.kind == TypeKind::Vec3 {
                     rhs.ty.clone()
+                } else if lhs.ty.kind == TypeKind::Mat4 && rhs.ty.kind == TypeKind::Vec4 {
+                    rhs.ty.clone()
                 } else {
                     promoted_type(&lhs.ty, &rhs.ty)
                 }
@@ -1361,7 +1369,7 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                         syntax::FunIdentifier::Identifier(i) => {
                             let sym = match state.lookup(i.as_str()) {
                                 Some(s) => s,
-                                None => panic!("missing {}", i.as_str())
+                                None => panic!("missing symbol {}", i.as_str())
                             };
                             match &state.sym(sym).decl {
                                 SymDecl::Function(fn_ty) => {
@@ -1740,18 +1748,36 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Vec3), Type::new(Float)]);
     declare_function(state, "vec4", Type::new(Vec4),
                      vec![Type::new(Float), Type::new(Float), Type::new(Float), Type::new(Float)]);
+    declare_function(state, "vec4", Type::new(Vec4),
+                     vec![Type::new(Vec2), Type::new(Float), Type::new(Float)]);
+    declare_function(state, "vec4", Type::new(Vec4),
+                     vec![Type::new(Vec2), Type::new(Vec2)]);
     declare_function(state, "vec2", Type::new(Vec2),
                      vec![Type::new(Float)]);
+    declare_function(state, "mat3", Type::new(Mat3),
+                     vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)]);
+    declare_function(state, "mat3", Type::new(Mat3),
+                     vec![Type::new(Mat4)]);
+    declare_function(state, "abs", Type::new(Float),
+                     vec![Type::new(Float), Type::new(Float)]);
+    declare_function(state, "dot", Type::new(Float),
+                     vec![Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "min", Type::new(Vec2),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
+
     declare_function(state, "mix", Type::new(Vec2),
                      vec![Type::new(Vec2), Type::new(Vec2), Type::new(Vec2)]);
     declare_function(state, "mix", Type::new(Vec3),
                      vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)]);
+    declare_function(state, "mix", Type::new(Vec4),
+                     vec![Type::new(Vec4), Type::new(Vec4), Type::new(Vec4)]);
+    declare_function(state, "mix", Type::new(Vec4),
+                     vec![Type::new(Vec4), Type::new(Vec4), Type::new(Float)]);
     declare_function(state, "mix", Type::new(Vec3),
                      vec![Type::new(Vec3), Type::new(Vec3), Type::new(Float)]);
     declare_function(state, "mix", Type::new(Float),
                      vec![Type::new(Float), Type::new(Float), Type::new(Float)]);
+
     declare_function(state, "step", Type::new(Vec2),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
     declare_function(state, "max", Type::new(Vec2),
@@ -1766,6 +1792,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Vec3), Type::new(Float), Type::new(Float)]);
     declare_function(state, "clamp", Type::new(Double),
                      vec![Type::new(Double), Type::new(Double), Type::new(Double)]);
+    declare_function(state, "clamp", Type::new(Vec2),
+                     vec![Type::new(Vec2), Type::new(Vec2), Type::new(Vec2)]);
     declare_function(state, "clamp", Type::new(Vec3),
                      vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "length", Type::new(Float), vec![Type::new(Vec2)]);
@@ -1781,6 +1809,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Double)]);
     declare_function(state, "int", Type::new(Int),
                      vec![Type::new(Float)]);
+    declare_function(state, "float", Type::new(Float),
+                     vec![Type::new(Float)]);
     declare_function(state, "int", Type::new(Int),
                      vec![Type::new(UInt)]);
     declare_function(state, "uint", Type::new(UInt),
@@ -1793,12 +1823,18 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Int), Type::new(Int)]);
     declare_function(state, "texelFetch", Type::new(Vec4),
                      vec![Type::new(Sampler2D), Type::new(IVec2), Type::new(Int)]);
+    declare_function(state, "texelFetch", Type::new(IVec4),
+                     vec![Type::new(ISampler2D), Type::new(IVec2), Type::new(Int)]);
     declare_function(state, "texture", Type::new(Vec4),
                      vec![Type::new(Sampler2D), Type::new(Vec3)]);
     declare_function(state, "texture", Type::new(Vec4),
                      vec![Type::new(Sampler2D), Type::new(Vec2)]);
+    declare_function(state, "transpose", Type::new(Mat3),
+                     vec![Type::new(Mat3)]);
     state.declare("gl_FragCoord", SymDecl::var(Vec4));
     state.declare("gl_FragColor", SymDecl::var(Vec4));
+    state.declare("gl_Position", SymDecl::var(Vec4));
+
 
     TranslationUnit(tu.0.map(state, translate_external_declaration))
 }
