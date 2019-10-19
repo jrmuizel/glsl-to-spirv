@@ -335,7 +335,7 @@ impl LiftFrom<&syntax::FullySpecifiedType> for Type {
             Some(x) => Some(Box::new(lift(state, x))),
             None => None
         };
-        let precision = get_precision(ty.qualifier.clone());
+        let precision = get_precision(&ty.qualifier);
         Type {
             kind,
             precision,
@@ -362,7 +362,7 @@ pub struct StructField {
     pub name: syntax::Identifier,
 }
 
-fn get_precision(qualifiers: Option<syntax::TypeQualifier>) -> Option<PrecisionQualifier>{
+fn get_precision(qualifiers: &Option<syntax::TypeQualifier>) -> Option<PrecisionQualifier>{
     let mut precision = None;
     for qual in qualifiers.iter().flat_map(|x| x.qualifiers.0.iter()) {
         match qual {
@@ -380,7 +380,7 @@ fn get_precision(qualifiers: Option<syntax::TypeQualifier>) -> Option<PrecisionQ
 
 impl LiftFrom<&StructFieldSpecifier> for StructField {
     fn lift(state: &mut State, f: &StructFieldSpecifier) -> Self {
-        let precision = get_precision(f.qualifier.clone());
+        let precision = get_precision(&f.qualifier);
         let mut ty: Type = lift(state, &f.ty);
         match &f.identifiers.0[..] {
             [ident] => {
@@ -516,8 +516,8 @@ pub struct FunctionPrototype {
 /// Function parameter declaration.
 #[derive(Clone, Debug, PartialEq)]
 pub enum FunctionParameterDeclaration {
-    Named(Option<TypeQualifier>, FunctionParameterDeclarator),
-    Unnamed(Option<TypeQualifier>, TypeSpecifier)
+    Named(Option<ParameterQualifier>, FunctionParameterDeclarator),
+    Unnamed(Option<ParameterQualifier>, TypeSpecifier)
 }
 
 /// Function parameter declarator.
@@ -558,28 +558,27 @@ fn lift_type_qualifier_for_declaration(state: &mut State, q: &Option<syntax::Typ
     })
 }
 
-fn lift_type_qualifier_for_parameter(state: &mut State, q: &Option<syntax::TypeQualifier>) -> Option<TypeQualifier> {
-    q.as_ref().and_then(|x| {
-        NonEmpty::from_iter(x.qualifiers.0.iter().flat_map(|x| {
-            match x {
-                syntax::TypeQualifierSpec::Precision(_) => None,
-                syntax::TypeQualifierSpec::Interpolation(i) => Some(TypeQualifierSpec::Interpolation(i.clone())),
-                syntax::TypeQualifierSpec::Invariant => Some(TypeQualifierSpec::Invariant),
-                syntax::TypeQualifierSpec::Layout(l) => Some(TypeQualifierSpec::Layout(l.clone())),
-                syntax::TypeQualifierSpec::Precise => Some(TypeQualifierSpec::Precise),
-                syntax::TypeQualifierSpec::Storage(s) => {
+fn lift_type_qualifier_for_parameter(state: &mut State, q: &Option<syntax::TypeQualifier>) -> Option<ParameterQualifier> {
+    let mut qp: Option<ParameterQualifier> = None;
+    if let Some(q) = q {
+        for x in &q.qualifiers.0 {
+            match (&qp, x) {
+                (None, syntax::TypeQualifierSpec::Storage(s)) => {
                     match s {
-                        syntax::StorageQualifier::Const => Some(TypeQualifierSpec::Parameter(ParameterQualifier::Const)),
-                        syntax::StorageQualifier::In => Some(TypeQualifierSpec::Parameter(ParameterQualifier::In)),
-                        syntax::StorageQualifier::Out => Some(TypeQualifierSpec::Parameter(ParameterQualifier::Out)),
-                        syntax::StorageQualifier::InOut => Some(TypeQualifierSpec::Parameter(ParameterQualifier::InOut)),
-                        _ => panic!("Bad type qualifier for parameter")
+                        syntax::StorageQualifier::Const => { qp = Some(ParameterQualifier::Const) }
+                        syntax::StorageQualifier::In => { qp = Some(ParameterQualifier::In) }
+                        syntax::StorageQualifier::Out => { qp = Some(ParameterQualifier::Out) },
+                        syntax::StorageQualifier::InOut => { qp = Some(ParameterQualifier::InOut) },
+                        _ => panic!("Bad storage qualifier for parameter")
                     }
                 }
+                (_, syntax::TypeQualifierSpec::Precision(_)) => {  }
+                _ => panic!("Bad parameter qualifier {:?}", x)
 
             }
-        })).map(|x| TypeQualifier{ qualifiers: x})
-    })
+        }
+    }
+    qp
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1652,35 +1651,30 @@ fn translate_compound_statement(state: &mut State, cs: &syntax::CompoundStatemen
     CompoundStatement { statement_list: cs.statement_list.iter().map(|x| translate_statement(state, x)).collect() }
 }
 
-fn translate_function_parameter_declarator(state: &mut State, d: &syntax::FunctionParameterDeclarator) -> FunctionParameterDeclarator {
-    let mut ty: Type = lift(state, &d.ty);
-    if let Some(a) = &d.ident.array_spec {
-        ty.array_sizes = Some(Box::new(lift(state, a)));
-    }
-    FunctionParameterDeclarator {
-        ty,
-        ident: d.ident.ident.clone(),
-    }
-}
+
+
 
 fn translate_function_parameter_declaration(state: &mut State, p: &syntax::FunctionParameterDeclaration) ->
   FunctionParameterDeclaration
 {
     match p {
         syntax::FunctionParameterDeclaration::Named(qual, p) => {
+            let mut ty: Type  = lift(state, &p.ty);
+            if let Some(a) = &p.ident.array_spec {
+                ty.array_sizes = Some(Box::new(lift(state, a)));
+            }
+
+            ty.precision = get_precision(qual);
+
             let decl = SymDecl::Variable(
                 StorageClass::None,
-                lift(state, &p.ty)
-
-                /*syntax::FullySpecifiedType {
-                    qualifier: None,
-                    ty: TypeSpecifier {
-                        ty: p.ty.ty.clone(),
-                        array_specifier: None
-                    }
-                }*/);
+                ty.clone());
+            let d = FunctionParameterDeclarator {
+                ty,
+                ident: p.ident.ident.clone(),
+            };
             state.declare(p.ident.ident.as_str(), decl);
-            FunctionParameterDeclaration::Named(lift_type_qualifier_for_parameter(state, qual), translate_function_parameter_declarator(state, p))
+            FunctionParameterDeclaration::Named(lift_type_qualifier_for_parameter(state, qual), d)
         }
         syntax::FunctionParameterDeclaration::Unnamed(qual, p) => {
             FunctionParameterDeclaration::Unnamed(lift_type_qualifier_for_parameter(state, qual), p.clone())

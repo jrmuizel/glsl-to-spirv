@@ -951,11 +951,21 @@ pub fn show_function_prototype<F>(f: &mut F, state: &mut OutputState, fp: &hir::
 
   let _ = f.write_str(")");
 }
+
+pub fn show_parameter_qualifier<F>(f: &mut F, i: &hir::ParameterQualifier) where F: Write {
+  match *i {
+    hir::ParameterQualifier::Const => { let _ = f.write_str("const"); }
+    hir::ParameterQualifier::In => { let _ = f.write_str("in"); }
+    hir::ParameterQualifier::Out => { let _ = f.write_str("out"); }
+    hir::ParameterQualifier::InOut => { let _ = f.write_str("inout"); }
+  }
+}
+
 pub fn show_function_parameter_declaration<F>(f: &mut F, state: &mut OutputState, p: &hir::FunctionParameterDeclaration) where F: Write {
   match *p {
     hir::FunctionParameterDeclaration::Named(ref qual, ref fpd) => {
       if let Some(ref q) = *qual {
-        show_type_qualifier(f, q);
+        show_parameter_qualifier(f, q);
         let _ = f.write_str(" ");
       }
 
@@ -963,7 +973,7 @@ pub fn show_function_parameter_declaration<F>(f: &mut F, state: &mut OutputState
     }
     hir::FunctionParameterDeclaration::Unnamed(ref qual, ref ty) => {
       if let Some(ref q) = *qual {
-        show_type_qualifier(f, q);
+        show_parameter_qualifier(f, q);
         let _ = f.write_str(" ");
       }
 
