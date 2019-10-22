@@ -1786,6 +1786,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Float), Type::new(Float)]);
     declare_function(state, "dot", Type::new(Float),
                      vec![Type::new(Vec3), Type::new(Vec3)]);
+    declare_function(state, "dot", Type::new(Float),
+                     vec![Type::new(Vec2), Type::new(Vec2)]);
     declare_function(state, "min", Type::new(Vec2),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
 
@@ -1867,6 +1869,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Sampler2DArray), Type::new(Int)]);
     declare_function(state, "transpose", Type::new(Mat3),
                      vec![Type::new(Mat3)]);
+    declare_function(state, "normalize", Type::new(Vec2),
+                     vec![Type::new(Vec2)]);
     state.declare("gl_FragCoord", SymDecl::var(Vec4));
     state.declare("gl_FragColor", SymDecl::var(Vec4));
     state.declare("gl_Position", SymDecl::var(Vec4));
