@@ -43,7 +43,7 @@ pub struct FunctionType {
     signatures: NonEmpty<FunctionSignature>
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StorageClass {
     None,
     Const,
@@ -1172,16 +1172,30 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
     }
 }
 
-fn translate_single_declaration_no_type(state: &mut State, d: &syntax::SingleDeclarationNoType) -> SingleDeclarationNoType {
-    panic!()
+fn translate_single_declaration_no_type(state: &mut State, d: &syntax::SingleDeclarationNoType, storage: StorageClass, ty: &Type) -> SingleDeclarationNoType {
+    if let Some(array) = &d.ident.array_spec {
+        panic!("unhandled array")
+    }
+    let decl = SymDecl::Variable(storage, ty.clone());
+    state.declare(d.ident.ident.as_str(), decl);
+    SingleDeclarationNoType {
+        ident: d.ident.clone(),
+        initializer: d.initializer.as_ref().map(|x| translate_initializater(state, x)),
+    }
 }
 
 fn translate_init_declarator_list(state: &mut State, l: &syntax::InitDeclaratorList) -> Declaration {
     match &l.head.name {
         Some(name) => {
+            let head = translate_single_declaration(state, &l.head);
+            let (storage, ty) = match &state.sym(head.name).decl {
+                SymDecl::Variable(storage, ty) => (*storage, ty.clone()),
+                _ => panic!()
+            };
+            let tail = l.tail.iter().map(|x| translate_single_declaration_no_type(state, x, storage, &ty)).collect();
             Declaration::InitDeclaratorList(InitDeclaratorList {
-                head: translate_single_declaration(state, &l.head),
-                tail: l.tail.iter().map(|x| translate_single_declaration_no_type(state, x)).collect()
+                head,
+                tail
             })
         }
         None => {
@@ -1311,10 +1325,15 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
         syntax::Expr::Assignment(lhs, op, rhs) => {
             let lhs = Box::new(translate_expression(state, lhs));
             let rhs = Box::new(translate_expression(state, rhs));
-            if !compatible_type(&lhs.ty, &rhs.ty) {
-                panic!("incompatible {:?} {:?}", lhs, rhs)
-            }
-            let ty = lhs.ty.clone();
+            let ty = if op == &AssignmentOp::Mult {
+                if lhs.ty.kind == TypeKind::Vec4 && rhs.ty.kind == TypeKind::Float {
+                    lhs.ty.clone()
+                } else {
+                    promoted_type(&lhs.ty, &rhs.ty)
+                }
+            } else {
+                promoted_type(&lhs.ty, &rhs.ty)
+            };
             Expr { kind: ExprKind::Assignment(lhs, op.clone(), rhs), ty }
         }
         syntax::Expr::Binary(op, lhs, rhs) => {
@@ -1833,8 +1852,17 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
     declare_function(state, "length", Type::new(Float), vec![Type::new(Vec2)]);
     declare_function(state, "pow", Type::new(Vec3), vec![Type::new(Vec3)]);
     declare_function(state, "pow", Type::new(Float), vec![Type::new(Float)]);
+    declare_function(state, "inversesqrt", Type::new(Float), vec![Type::new(Float)]);
+    declare_function(state, "distance", Type::new(Float), vec![Type::new(Vec2), Type::new(Vec2)]);
+
     declare_function(state, "lessThanEqual", Type::new(BVec3),
                      vec![Type::new(Vec3), Type::new(Vec3)]);
+    declare_function(state, "lessThanEqual", Type::new(BVec2),
+                     vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "lessThan", Type::new(BVec2),
+                     vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "any", Type::new(Bool), vec![Type::new(BVec2)]);
+    declare_function(state, "all", Type::new(Bool), vec![Type::new(BVec2)]);
     declare_function(state, "if_then_else", Type::new(Vec3),
                      vec![Type::new(BVec3), Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "floor", Type::new(Vec4),
