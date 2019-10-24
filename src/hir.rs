@@ -1884,6 +1884,7 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
     declare_function(state, "length", Type::new(Float), vec![Type::new(Vec2)]);
     declare_function(state, "pow", Type::new(Vec3), vec![Type::new(Vec3)]);
     declare_function(state, "pow", Type::new(Float), vec![Type::new(Float)]);
+    declare_function(state, "exp", Type::new(Float), vec![Type::new(Float)]);
     declare_function(state, "inversesqrt", Type::new(Float), vec![Type::new(Float)]);
     declare_function(state, "sqrt", Type::new(Float), vec![Type::new(Float)]);
     declare_function(state, "distance", Type::new(Float), vec![Type::new(Vec2), Type::new(Vec2)]);
