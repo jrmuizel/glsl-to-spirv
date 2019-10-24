@@ -839,7 +839,7 @@ impl<'a> IntoIterator for &'a mut TranslationUnit {
 /// External declaration.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExternalDeclaration {
-    Preprocessor(Preprocessor),
+    Preprocessor(syntax::Preprocessor),
     FunctionDefinition(FunctionDefinition),
     Declaration(Declaration)
 }
@@ -1012,69 +1012,6 @@ pub enum JumpStatement {
     Break,
     Return(Box<Expr>),
     Discard
-}
-
-/// Some basic preprocessor commands.
-///
-/// As it’s important to carry them around the AST because they cannot be substituted in a normal
-/// preprocessor (they’re used by GPU’s compilers), those preprocessor commands are available for
-/// inspection.
-///
-/// > Important note: so far, only `#version` and `#extension` are supported. Other pragmas will be
-/// > added in the future. Stay tuned.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Preprocessor {
-    Define(PreprocessorDefine),
-    Version(PreprocessorVersion),
-    Extension(PreprocessorExtension)
-}
-
-/// A #define preprocessor command.
-/// Allows any expression but only Integer and Float literals make sense
-#[derive(Clone, Debug, PartialEq)]
-pub struct PreprocessorDefine {
-    pub name: Identifier,
-    pub value: Expr,
-}
-
-/// A #version preprocessor command.
-#[derive(Clone, Debug, PartialEq)]
-pub struct PreprocessorVersion {
-    pub version: u16,
-    pub profile: Option<PreprocessorVersionProfile>
-}
-
-/// A #version profile annotation.
-#[derive(Clone, Debug, PartialEq)]
-pub enum PreprocessorVersionProfile {
-    Core,
-    Compatibility,
-    ES
-}
-
-/// An #extension preprocessor command.
-#[derive(Clone, Debug, PartialEq)]
-pub struct PreprocessorExtension {
-    pub name: PreprocessorExtensionName,
-    pub behavior: Option<PreprocessorExtensionBehavior>
-}
-
-/// An #extension name annotation.
-#[derive(Clone, Debug, PartialEq)]
-pub enum PreprocessorExtensionName {
-    /// All extensions you could ever imagine in your whole lifetime (how crazy is that!).
-    All,
-    /// A specific extension.
-    Specific(String)
-}
-
-/// An #extension behavior annotation.
-#[derive(Clone, Debug, PartialEq)]
-pub enum PreprocessorExtensionBehavior {
-    Require,
-    Enable,
-    Warn,
-    Disable
 }
 
 trait NonEmptyExt<T> {
@@ -1759,7 +1696,7 @@ fn translate_external_declaration(state: &mut State, ed: &syntax::ExternalDeclar
         syntax::ExternalDeclaration::FunctionDefinition(fd) =>
             ExternalDeclaration::FunctionDefinition(translate_function_definition(state, fd)),
         syntax::ExternalDeclaration::Preprocessor(p) =>
-            ExternalDeclaration::Preprocessor(panic!())
+            ExternalDeclaration::Preprocessor(p.clone())
     }
 }
 
