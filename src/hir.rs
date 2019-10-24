@@ -1202,6 +1202,8 @@ fn is_ivec(ty: &Type) -> bool {
 }
 
 fn compatible_type(lhs: &Type, rhs: &Type) -> bool {
+
+    // XXX: use an underlying type helper
     if lhs == &Type::new(TypeKind::Double) &&
         rhs == &Type::new(TypeKind::Float) {
         true
@@ -1209,10 +1211,16 @@ fn compatible_type(lhs: &Type, rhs: &Type) -> bool {
         lhs == &Type::new(TypeKind::Float) {
         true
     } else if rhs == &Type::new(TypeKind::Int) &&
-        lhs == &Type::new(TypeKind::Float) {
+        lhs == &Type::new(TypeKind::Float) || lhs == &Type::new(TypeKind::Double) {
         true
-    } else if rhs == &Type::new(TypeKind::Float) &&
+    } else if rhs == &Type::new(TypeKind::Float) || rhs == &Type::new(TypeKind::Double) &&
         lhs == &Type::new(TypeKind::Int) {
+        true
+    } else if rhs == &Type::new(TypeKind::Vec2) || rhs == &Type::new(TypeKind::DVec2) &&
+        lhs == &Type::new(TypeKind::IVec2) {
+        true
+    } else if rhs == &Type::new(TypeKind::IVec2) &&
+        (lhs == &Type::new(TypeKind::Vec2) || lhs == &Type::new(TypeKind::DVec2)) {
         true
     } else {
         lhs.kind == rhs.kind && lhs.array_sizes == rhs.array_sizes
@@ -1734,6 +1742,28 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
     declare_function(state, "vec4", Type::new(Vec4),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
 
+    declare_function(state, "bvec4", Type::new(BVec4),
+                     vec![Type::new(BVec2), Type::new(BVec2)]);
+
+    declare_function(state, "int", Type::new(Int),
+                     vec![Type::new(Float)]);
+    declare_function(state, "float", Type::new(Float),
+                     vec![Type::new(Float)]);
+    declare_function(state, "int", Type::new(Int),
+                     vec![Type::new(UInt)]);
+    declare_function(state, "uint", Type::new(UInt),
+                     vec![Type::new(Float)]);
+    declare_function(state, "uint", Type::new(UInt),
+                     vec![Type::new(Int)]);
+    declare_function(state, "ivec2", Type::new(IVec2),
+                     vec![Type::new(UInt), Type::new(UInt)]);
+    declare_function(state, "ivec2", Type::new(IVec2),
+                     vec![Type::new(Int), Type::new(Int)]);
+    declare_function(state, "ivec3", Type::new(IVec3),
+                     vec![Type::new(IVec2), Type::new(Int)]);
+    declare_function(state, "ivec4", Type::new(IVec4),
+                     vec![Type::new(Int), Type::new(Int), Type::new(Int), Type::new(Int)]);
+
     declare_function(state, "mat3", Type::new(Mat3),
                      vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "mat3", Type::new(Mat3),
@@ -1798,32 +1828,25 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Vec2), Type::new(Vec2)]);
     declare_function(state, "lessThan", Type::new(BVec2),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "greaterThan", Type::new(BVec2),
+                     vec![Type::new(Vec2), Type::new(Vec2)]);
     declare_function(state, "any", Type::new(Bool), vec![Type::new(BVec2)]);
     declare_function(state, "all", Type::new(Bool), vec![Type::new(BVec2)]);
+    declare_function(state, "all", Type::new(Bool), vec![Type::new(BVec4)]);
+
     declare_function(state, "if_then_else", Type::new(Vec3),
                      vec![Type::new(BVec3), Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "floor", Type::new(Vec4),
                      vec![Type::new(Vec4)]);
     declare_function(state, "floor", Type::new(Double),
                      vec![Type::new(Double)]);
-    declare_function(state, "int", Type::new(Int),
+    declare_function(state, "fract", Type::new(Float),
                      vec![Type::new(Float)]);
-    declare_function(state, "float", Type::new(Float),
-                     vec![Type::new(Float)]);
-    declare_function(state, "int", Type::new(Int),
-                     vec![Type::new(UInt)]);
-    declare_function(state, "uint", Type::new(UInt),
-                     vec![Type::new(Float)]);
-    declare_function(state, "uint", Type::new(UInt),
-                     vec![Type::new(Int)]);
-    declare_function(state, "ivec2", Type::new(IVec2),
-                     vec![Type::new(UInt), Type::new(UInt)]);
-    declare_function(state, "ivec2", Type::new(IVec2),
-                     vec![Type::new(Int), Type::new(Int)]);
-    declare_function(state, "ivec4", Type::new(IVec4),
-                     vec![Type::new(Int), Type::new(Int), Type::new(Int), Type::new(Int)]);
+
     declare_function(state, "texelFetch", Type::new(Vec4),
                      vec![Type::new(Sampler2D), Type::new(IVec2), Type::new(Int)]);
+    declare_function(state, "texelFetch", Type::new(Vec4),
+                     vec![Type::new(Sampler2DArray), Type::new(IVec3), Type::new(Int)]);
     declare_function(state, "texelFetch", Type::new(IVec4),
                      vec![Type::new(ISampler2D), Type::new(IVec2), Type::new(Int)]);
     declare_function(state, "texture", Type::new(Vec4),
