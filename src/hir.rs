@@ -545,7 +545,7 @@ pub struct TypeQualifier {
 
 fn lift_type_qualifier_for_declaration(state: &mut State, q: &Option<syntax::TypeQualifier>) -> Option<TypeQualifier> {
     q.as_ref().and_then(|x| {
-        NonEmpty::from_non_empty_iter(x.qualifiers.0.iter().flat_map(|x| {
+        NonEmpty::from_iter(x.qualifiers.0.iter().flat_map(|x| {
             match x {
                 syntax::TypeQualifierSpec::Precision(_) => None,
                 syntax::TypeQualifierSpec::Interpolation(i) => Some(TypeQualifierSpec::Interpolation(i.clone())),
@@ -791,7 +791,7 @@ impl TranslationUnit {
     ///
     /// `None` if the iterator yields no value.
     pub fn from_iter<I>(iter: I) -> Option<Self> where I: IntoIterator<Item = ExternalDeclaration> {
-        NonEmpty::from_non_empty_iter(iter).map(TranslationUnit)
+        NonEmpty::from_iter(iter).map(TranslationUnit)
     }
 }
 
@@ -1021,10 +1021,10 @@ trait NonEmptyExt<T> {
 
 impl<T> NonEmptyExt<T> for NonEmpty<T> {
     fn map<U, F: FnMut(&mut State, &T) -> U>(&self, s: &mut State, mut f: F) -> NonEmpty<U> {
-        NonEmpty::from_non_empty_iter(self.into_iter().map(|x| f(s, &x))).unwrap()
+        NonEmpty::from_iter(self.into_iter().map(|x| f(s, &x))).unwrap()
     }
     fn new(x: T) -> NonEmpty<T> {
-        NonEmpty::from_non_empty_iter(vec![x].into_iter()).unwrap()
+        NonEmpty::from_iter(vec![x].into_iter()).unwrap()
     }
 }
 
@@ -1211,12 +1211,12 @@ fn compatible_type(lhs: &Type, rhs: &Type) -> bool {
         lhs == &Type::new(TypeKind::Float) {
         true
     } else if rhs == &Type::new(TypeKind::Int) &&
-        lhs == &Type::new(TypeKind::Float) || lhs == &Type::new(TypeKind::Double) {
+        (lhs == &Type::new(TypeKind::Float) || lhs == &Type::new(TypeKind::Double)) {
         true
-    } else if rhs == &Type::new(TypeKind::Float) || rhs == &Type::new(TypeKind::Double) &&
+    } else if (rhs == &Type::new(TypeKind::Float) || rhs == &Type::new(TypeKind::Double)) &&
         lhs == &Type::new(TypeKind::Int) {
         true
-    } else if rhs == &Type::new(TypeKind::Vec2) || rhs == &Type::new(TypeKind::DVec2) &&
+    } else if (rhs == &Type::new(TypeKind::Vec2) || rhs == &Type::new(TypeKind::DVec2)) &&
         lhs == &Type::new(TypeKind::IVec2) {
         true
     } else if rhs == &Type::new(TypeKind::IVec2) &&
