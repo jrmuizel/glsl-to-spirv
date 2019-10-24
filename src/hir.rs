@@ -1305,6 +1305,10 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                     rhs.ty.clone()
                 } else if lhs.ty.kind == TypeKind::Mat4 && rhs.ty.kind == TypeKind::Vec4 {
                     rhs.ty.clone()
+                } else if lhs.ty.kind == TypeKind::Mat2 && rhs.ty.kind == TypeKind::Vec2 {
+                    rhs.ty.clone()
+                } else if lhs.ty.kind == TypeKind::Mat2 && rhs.ty.kind == TypeKind::Float {
+                    lhs.ty.clone()
                 } else {
                     promoted_type(&lhs.ty, &rhs.ty)
                 }
@@ -1761,6 +1765,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
     declare_function(state, "vec4", Type::new(Vec4),
                      vec![Type::new(Vec4)]);
 
+    declare_function(state, "bvec2", Type::new(BVec2),
+                     vec![Type::new(UInt)]);
     declare_function(state, "bvec4", Type::new(BVec4),
                      vec![Type::new(BVec2), Type::new(BVec2)]);
 
@@ -1789,6 +1795,12 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
     declare_function(state, "ivec4", Type::new(IVec4),
                      vec![Type::new(IVec2), Type::new(Int), Type::new(Int)]);
 
+    declare_function(state, "mat2", Type::new(Mat2),
+                     vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "mat2", Type::new(Mat2),
+                     vec![Type::new(Float)]);
+    declare_function(state, "mat2", Type::new(Mat2),
+                     vec![Type::new(Mat4)]);
     declare_function(state, "mat3", Type::new(Mat3),
                      vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "mat3", Type::new(Mat3),
@@ -1826,6 +1838,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
 
     declare_function(state, "mix", Type::new(Vec2),
                      vec![Type::new(Vec2), Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "mix", Type::new(Vec2),
+                     vec![Type::new(Vec2), Type::new(Vec2), Type::new(BVec2)]);
     declare_function(state, "mix", Type::new(Vec2),
                      vec![Type::new(Vec2), Type::new(Vec2), Type::new(Float)]);
     declare_function(state, "mix", Type::new(Vec3),
@@ -1874,10 +1888,12 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
     declare_function(state, "sqrt", Type::new(Float), vec![Type::new(Float)]);
     declare_function(state, "distance", Type::new(Float), vec![Type::new(Vec2), Type::new(Vec2)]);
 
-    declare_function(state, "lessThanEqual", Type::new(BVec3),
-                     vec![Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "lessThanEqual", Type::new(BVec2),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "lessThanEqual", Type::new(BVec3),
+                     vec![Type::new(Vec3), Type::new(Vec3)]);
+    declare_function(state, "lessThanEqual", Type::new(BVec4),
+                     vec![Type::new(Vec4), Type::new(Vec4)]);
     declare_function(state, "lessThan", Type::new(BVec2),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
     declare_function(state, "greaterThan", Type::new(BVec2),
@@ -1924,6 +1940,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
     declare_function(state, "textureSize", Type::new(IVec2),
                      vec![Type::new(Sampler2DArray), Type::new(Int)]);
 
+    declare_function(state, "inverse", Type::new(Mat2),
+                     vec![Type::new(Mat2)]);
     declare_function(state, "transpose", Type::new(Mat3),
                      vec![Type::new(Mat3)]);
     declare_function(state, "normalize", Type::new(Vec2),
