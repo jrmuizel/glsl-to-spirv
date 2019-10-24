@@ -1757,6 +1757,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Vec2), Type::new(Float), Type::new(Float)]);
     declare_function(state, "vec4", Type::new(Vec4),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "vec4", Type::new(Vec4),
+                     vec![Type::new(Vec4)]);
 
     declare_function(state, "bvec4", Type::new(BVec4),
                      vec![Type::new(BVec2), Type::new(BVec2)]);
@@ -1775,6 +1777,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(UInt), Type::new(UInt)]);
     declare_function(state, "ivec2", Type::new(IVec2),
                      vec![Type::new(Int), Type::new(Int)]);
+    declare_function(state, "ivec2", Type::new(IVec2),
+                     vec![Type::new(Vec2)]);
     declare_function(state, "ivec3", Type::new(IVec3),
                      vec![Type::new(IVec2), Type::new(Int)]);
     declare_function(state, "ivec4", Type::new(IVec4),
@@ -1784,14 +1788,32 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Vec3), Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "mat3", Type::new(Mat3),
                      vec![Type::new(Mat4)]);
+    declare_function(state, "mat3", Type::new(Mat3),
+                     vec![Type::new(Float), Type::new(Float), Type::new(Float),
+                          Type::new(Float), Type::new(Float), Type::new(Float),
+                          Type::new(Float), Type::new(Float), Type::new(Float)]);
+    declare_function(state, "abs", Type::new(Vec3),
+                     vec![Type::new(Vec3)]);
     declare_function(state, "abs", Type::new(Float),
-                     vec![Type::new(Float), Type::new(Float)]);
+                     vec![Type::new(Float)]);
     declare_function(state, "dot", Type::new(Float),
                      vec![Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "dot", Type::new(Float),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "min", Type::new(Float),
+                     vec![Type::new(Float), Type::new(Float)]);
     declare_function(state, "min", Type::new(Vec2),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "min", Type::new(Vec3),
+                     vec![Type::new(Vec3), Type::new(Vec3)]);
+
+    declare_function(state, "max", Type::new(Float),
+                     vec![Type::new(Float), Type::new(Float)]);
+    declare_function(state, "max", Type::new(Vec2),
+                     vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "max", Type::new(Vec3),
+                     vec![Type::new(Vec3), Type::new(Vec3)]);
+
 
     declare_function(state, "mix", Type::new(Vec2),
                      vec![Type::new(Vec2), Type::new(Vec2), Type::new(Vec2)]);
@@ -1812,14 +1834,11 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
 
     declare_function(state, "step", Type::new(Vec2),
                      vec![Type::new(Vec2), Type::new(Vec2)]);
+    declare_function(state, "step", Type::new(Vec3),
+                     vec![Type::new(Vec3), Type::new(Vec3)]);
     declare_function(state, "notEqual", Type::new(BVec4),
                      vec![Type::new(IVec4), Type::new(IVec4)]);
-    declare_function(state, "max", Type::new(Vec2),
-                     vec![Type::new(Vec2), Type::new(Vec2)]);
-    declare_function(state, "max", Type::new(Float),
-                     vec![Type::new(Float), Type::new(Float)]);
-    declare_function(state, "min", Type::new(Float),
-                     vec![Type::new(Float), Type::new(Float)]);
+
     declare_function(state, "fwidth", Type::new(Vec2),
                      vec![Type::new(Vec2)]);
     declare_function(state, "cos", Type::new(Float),
@@ -1838,6 +1857,7 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
     declare_function(state, "pow", Type::new(Vec3), vec![Type::new(Vec3)]);
     declare_function(state, "pow", Type::new(Float), vec![Type::new(Float)]);
     declare_function(state, "inversesqrt", Type::new(Float), vec![Type::new(Float)]);
+    declare_function(state, "sqrt", Type::new(Float), vec![Type::new(Float)]);
     declare_function(state, "distance", Type::new(Float), vec![Type::new(Vec2), Type::new(Vec2)]);
 
     declare_function(state, "lessThanEqual", Type::new(BVec3),
@@ -1860,6 +1880,8 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Double)]);
     declare_function(state, "fract", Type::new(Float),
                      vec![Type::new(Float)]);
+    declare_function(state, "mod", Type::new(Vec2),
+                     vec![Type::new(Vec2)]);
 
     declare_function(state, "texelFetch", Type::new(Vec4),
                      vec![Type::new(Sampler2D), Type::new(IVec2), Type::new(Int)]);
@@ -1873,8 +1895,11 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Sampler2D), Type::new(Vec2)]);
     declare_function(state, "texture", Type::new(Vec4),
                      vec![Type::new(Sampler2DArray), Type::new(Vec3)]);
+    declare_function(state, "textureLod", Type::new(Vec4),
+                     vec![Type::new(Sampler2DArray), Type::new(Vec3), Type::new(Float)]);
     declare_function(state, "textureSize", Type::new(IVec2),
                      vec![Type::new(Sampler2DArray), Type::new(Int)]);
+
     declare_function(state, "transpose", Type::new(Mat3),
                      vec![Type::new(Mat3)]);
     declare_function(state, "normalize", Type::new(Vec2),
