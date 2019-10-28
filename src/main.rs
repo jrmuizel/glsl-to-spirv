@@ -1318,9 +1318,13 @@ pub fn show_jump_statement<F>(f: &mut F, state: &mut OutputState, j: &hir::JumpS
     hir::JumpStatement::Break => { let _ = f.write_str("break;\n"); }
     hir::JumpStatement::Discard => { let _ = f.write_str("discard;\n"); }
     hir::JumpStatement::Return(ref e) => {
-      let _ = f.write_str("return ");
-      show_hir_expr(f, state, e);
-      let _ = f.write_str(";\n");
+      if let Some(e) = e {
+          let _ = f.write_str("return ");
+          show_hir_expr(f, state, e);
+          let _ = f.write_str(";\n");
+      } else {
+          let _ = f.write_str("return;");
+      }
     }
   }
 }

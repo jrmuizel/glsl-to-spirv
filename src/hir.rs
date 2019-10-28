@@ -1010,7 +1010,7 @@ pub struct ForRestStatement {
 pub enum JumpStatement {
     Continue,
     Break,
-    Return(Box<Expr>),
+    Return(Option<Box<Expr>>),
     Discard
 }
 
@@ -1553,7 +1553,9 @@ fn translate_jump(state: &mut State, s: &syntax::JumpStatement) -> JumpStatement
         syntax::JumpStatement::Break => JumpStatement::Break,
         syntax::JumpStatement::Continue => JumpStatement::Continue,
         syntax::JumpStatement::Discard => JumpStatement::Discard,
-        syntax::JumpStatement::Return(e) => JumpStatement::Return(Box::new(translate_expression(state, e)))
+        syntax::JumpStatement::Return(e) => {
+            JumpStatement::Return(e.as_ref().map(|e| Box::new(translate_expression(state, e))))
+        }
     }
 }
 
@@ -1947,9 +1949,9 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Mat3)]);
     declare_function(state, "normalize", Type::new(Vec2),
                      vec![Type::new(Vec2)]);
-    state.declare("gl_FragCoord", SymDecl::var(Vec4));
-    state.declare("gl_FragColor", SymDecl::var(Vec4));
-    state.declare("gl_Position", SymDecl::var(Vec4));
+    state.declare("gl_FragCoord", SymDecl::Variable(StorageClass::Out, Type::new(Vec4)));
+    state.declare("gl_FragColor", SymDecl::Variable(StorageClass::Out, Type::new(Vec4)));
+    state.declare("gl_Position", SymDecl::Variable(StorageClass::Out, Type::new(Vec4)));
 
 
     TranslationUnit(tu.0.map(state, translate_external_declaration))
