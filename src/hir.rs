@@ -2,7 +2,7 @@ use std::iter::{FromIterator, once};
 use std::ops::{Deref, DerefMut};
 use std::collections::HashMap;
 
-use glsl::syntax::{NonEmpty, TypeSpecifier, TypeSpecifierNonArray};
+use glsl::syntax::{NonEmpty, TypeSpecifier, TypeSpecifierNonArray, InterpolationQualifier};
 use glsl::syntax;
 use glsl::syntax::StructFieldSpecifier;
 use glsl::syntax::PrecisionQualifier;
@@ -412,13 +412,13 @@ impl LiftFrom<&StructSpecifier> for StructFields {
 pub enum SymDecl {
     Function(FunctionType),
     Local(StorageClass, Type),
-    Global(StorageClass, Type),
+    Global(StorageClass, Option<syntax::InterpolationQualifier>, Type),
     Struct(StructFields)
 }
 
 impl SymDecl {
     fn var(t: TypeKind) -> Self {
-        SymDecl::Global(StorageClass::None, Type::new(t))
+        SymDecl::Global(StorageClass::None, None, Type::new(t))
     }
 }
 
@@ -1072,6 +1072,7 @@ fn translate_variable_declaration(state: &mut State, d: &syntax::InitDeclaratorL
     let (sym, decl) = match d.head.name.as_ref() {
         Some(name) => {
             let mut storage = StorageClass::None;
+            let mut interpolation = None;
             for qual in d.head.ty.qualifier.iter().flat_map(|x| x.qualifiers.0.iter()) {
                 match qual {
                     syntax::TypeQualifierSpec::Storage(s) => {
@@ -1091,6 +1092,14 @@ fn translate_variable_declaration(state: &mut State, d: &syntax::InitDeclaratorL
                             _ => panic!("bad storage {:?}", (storage, s))
                         }
                     }
+                    syntax::TypeQualifierSpec::Interpolation(i) => {
+                        match (&interpolation, i) {
+                            (None, i) => {
+                                interpolation = Some(i.clone())
+                            }
+                            _ => panic!("multiple interpolation")
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -1098,7 +1107,7 @@ fn translate_variable_declaration(state: &mut State, d: &syntax::InitDeclaratorL
                 assert!(storage == StorageClass::None || storage == StorageClass::Const);
                 SymDecl::Local(storage, ty.clone())
             } else {
-                SymDecl::Global(storage, ty.clone())
+                SymDecl::Global(storage, interpolation, ty.clone())
             };
             (state.declare(d.head.name.as_ref().unwrap().as_str(), decl.clone()), decl)
         }
@@ -1281,7 +1290,7 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                 None => panic!("missing declaration {}", i.as_str())
             };
             let ty = match &state.sym(sym).decl {
-                SymDecl::Global(_, ty) => ty.clone(),
+                SymDecl::Global(_, _, ty) => ty.clone(),
                 SymDecl::Local(_, ty) => ty.clone(),
                 _ => panic!("bad variable type")
             };
@@ -1657,7 +1666,7 @@ fn translate_function_parameter_declaration(state: &mut State, p: &syntax::Funct
 
             ty.precision = get_precision(qual);
 
-            let decl = SymDecl::Global(
+            let decl = SymDecl::Local(
                 StorageClass::None,
                 ty.clone());
             let d = FunctionParameterDeclarator {
@@ -1955,9 +1964,9 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Mat3)]);
     declare_function(state, "normalize", Type::new(Vec2),
                      vec![Type::new(Vec2)]);
-    state.declare("gl_FragCoord", SymDecl::Global(StorageClass::Out, Type::new(Vec4)));
-    state.declare("gl_FragColor", SymDecl::Global(StorageClass::Out, Type::new(Vec4)));
-    state.declare("gl_Position", SymDecl::Global(StorageClass::Out, Type::new(Vec4)));
+    state.declare("gl_FragCoord", SymDecl::Global(StorageClass::Out, None, Type::new(Vec4)));
+    state.declare("gl_FragColor", SymDecl::Global(StorageClass::Out, None, Type::new(Vec4)));
+    state.declare("gl_Position", SymDecl::Global(StorageClass::Out, None, Type::new(Vec4)));
 
 
     TranslationUnit(tu.0.map(state, translate_external_declaration))
