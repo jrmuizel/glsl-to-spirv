@@ -550,7 +550,7 @@ fn lift_type_qualifier_for_declaration(state: &mut State, q: &Option<syntax::Typ
         NonEmpty::from_non_empty_iter(x.qualifiers.0.iter().flat_map(|x| {
             match x {
                 syntax::TypeQualifierSpec::Precision(_) => None,
-                syntax::TypeQualifierSpec::Interpolation(i) => Some(TypeQualifierSpec::Interpolation(i.clone())),
+                syntax::TypeQualifierSpec::Interpolation(i) => None,
                 syntax::TypeQualifierSpec::Invariant => Some(TypeQualifierSpec::Invariant),
                 syntax::TypeQualifierSpec::Layout(l) => Some(TypeQualifierSpec::Layout(l.clone())),
                 syntax::TypeQualifierSpec::Precise => Some(TypeQualifierSpec::Precise),
@@ -604,7 +604,6 @@ pub enum MemoryQualifier {
 #[derive(Clone, Debug, PartialEq)]
 pub enum TypeQualifierSpec {
     Layout(syntax::LayoutQualifier),
-    Interpolation(syntax::InterpolationQualifier),
     Invariant,
     Parameter(ParameterQualifier),
     Memory(MemoryQualifier),

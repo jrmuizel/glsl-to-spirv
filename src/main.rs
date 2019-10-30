@@ -374,7 +374,6 @@ pub fn show_type_qualifier<F>(f: &mut F, q: &hir::TypeQualifier) where F: Write 
 pub fn show_type_qualifier_spec<F>(f: &mut F, q: &hir::TypeQualifierSpec) where F: Write {
   match *q {
     hir::TypeQualifierSpec::Layout(ref l) => show_layout_qualifier(f, &l),
-    hir::TypeQualifierSpec::Interpolation(ref i) => show_interpolation_qualifier(f, &i),
     hir::TypeQualifierSpec::Invariant => { let _ = f.write_str("invariant"); },
     hir::TypeQualifierSpec::Precise => { let _ = f.write_str("precise"); }
     hir::TypeQualifierSpec::Memory(_) => { panic!() }
