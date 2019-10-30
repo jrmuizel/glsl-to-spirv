@@ -411,13 +411,14 @@ impl LiftFrom<&StructSpecifier> for StructFields {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SymDecl {
     Function(FunctionType),
-    Variable(StorageClass, Type),
+    Local(StorageClass, Type),
+    Global(StorageClass, Type),
     Struct(StructFields)
 }
 
 impl SymDecl {
     fn var(t: TypeKind) -> Self {
-        SymDecl::Variable(StorageClass::None, Type::new(t))
+        SymDecl::Global(StorageClass::None, Type::new(t))
     }
 }
 
@@ -437,12 +438,13 @@ impl Scope {
 pub struct State {
     scopes: Vec<Scope>,
     syms: Vec<Symbol>,
+    in_function: bool,
 }
 
 
 impl State {
     pub fn new() -> Self {
-        State { scopes: Vec::new(), syms: Vec::new() }
+        State { scopes: Vec::new(), syms: Vec::new(), in_function: false }
     }
 
     fn lookup(&self, name: &str) -> Option<SymRef> {
@@ -1051,9 +1053,9 @@ fn translate_struct_declaration(state: &mut State, d: &syntax::SingleDeclaration
     Declaration::StructDefinition(ty_def)
 }
 
-fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration) -> SingleDeclaration {
-    let mut ty = d.ty.clone();
-    ty.ty.array_specifier = d.array_specifier.clone();
+fn translate_variable_declaration(state: &mut State, d: &syntax::InitDeclaratorList) -> Declaration {
+    let mut ty = d.head.ty.clone();
+    ty.ty.array_specifier = d.head.array_specifier.clone();
     let ty_def = match &ty.ty.ty {
         TypeSpecifierNonArray::Struct(s) => {
             let decl = SymDecl::Struct(lift(state, s));
@@ -1062,15 +1064,15 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
         _ => None
     };
 
-    let mut ty: Type = lift(state, &d.ty);
-    if let Some(array) = &d.array_specifier {
+    let mut ty: Type = lift(state, &d.head.ty);
+    if let Some(array) = &d.head.array_specifier {
         ty.array_sizes = Some(Box::new(lift(state, array)))
     }
 
-    let name = match d.name.as_ref() {
+    let (sym, decl) = match d.head.name.as_ref() {
         Some(name) => {
             let mut storage = StorageClass::None;
-            for qual in d.ty.qualifier.iter().flat_map(|x| x.qualifiers.0.iter()) {
+            for qual in d.head.ty.qualifier.iter().flat_map(|x| x.qualifiers.0.iter()) {
                 match qual {
                     syntax::TypeQualifierSpec::Storage(s) => {
                         match (&storage, s) {
@@ -1092,48 +1094,45 @@ fn translate_single_declaration(state: &mut State, d: &syntax::SingleDeclaration
                     _ => {}
                 }
             }
-            let decl = SymDecl::Variable(storage, ty.clone());
-            Some(state.declare(d.name.as_ref().unwrap().as_str(), decl))
+            let decl = if state.in_function {
+                assert!(storage == StorageClass::None || storage == StorageClass::Const);
+                SymDecl::Local(storage, ty.clone())
+            } else {
+                SymDecl::Global(storage, ty.clone())
+            };
+            (state.declare(d.head.name.as_ref().unwrap().as_str(), decl.clone()), decl)
         }
-        None => None
+        None => panic!()
     };
 
-
-
-    SingleDeclaration {
-        qualifier: lift_type_qualifier_for_declaration(state, &d.ty.qualifier),
-        name: name.expect("must have name"),
+    let head = SingleDeclaration {
+        qualifier: lift_type_qualifier_for_declaration(state, &d.head.ty.qualifier),
+        name: sym,
         ty,
         ty_def,
-        initializer: d.initializer.as_ref().map(|x| translate_initializater(state, x)),
-    }
-}
+        initializer: d.head.initializer.as_ref().map(|x| translate_initializater(state, x)),
+    };
 
-fn translate_single_declaration_no_type(state: &mut State, d: &syntax::SingleDeclarationNoType, storage: StorageClass, ty: &Type) -> SingleDeclarationNoType {
-    if let Some(array) = &d.ident.array_spec {
-        panic!("unhandled array")
-    }
-    let decl = SymDecl::Variable(storage, ty.clone());
-    state.declare(d.ident.ident.as_str(), decl);
-    SingleDeclarationNoType {
-        ident: d.ident.clone(),
-        initializer: d.initializer.as_ref().map(|x| translate_initializater(state, x)),
-    }
+    let tail = d.tail.iter().map(|d| {
+        if let Some(array) = &d.ident.array_spec {
+            panic!("unhandled array")
+        }
+        state.declare(d.ident.ident.as_str(), decl.clone());
+        SingleDeclarationNoType {
+            ident: d.ident.clone(),
+            initializer: d.initializer.as_ref().map(|x| translate_initializater(state, x)),
+        }
+    }).collect();
+    Declaration::InitDeclaratorList(InitDeclaratorList {
+        head,
+        tail
+    })
 }
 
 fn translate_init_declarator_list(state: &mut State, l: &syntax::InitDeclaratorList) -> Declaration {
     match &l.head.name {
         Some(name) => {
-            let head = translate_single_declaration(state, &l.head);
-            let (storage, ty) = match &state.sym(head.name).decl {
-                SymDecl::Variable(storage, ty) => (*storage, ty.clone()),
-                _ => panic!()
-            };
-            let tail = l.tail.iter().map(|x| translate_single_declaration_no_type(state, x, storage, &ty)).collect();
-            Declaration::InitDeclaratorList(InitDeclaratorList {
-                head,
-                tail
-            })
+            translate_variable_declaration(state, l)
         }
         None => {
             translate_struct_declaration(state, &l.head)
@@ -1146,7 +1145,11 @@ fn translate_declaration(state: &mut State, d: &syntax::Declaration) -> Declarat
     match d {
         syntax::Declaration::Block(b) => Declaration::Block(panic!()),
         syntax::Declaration::FunctionPrototype(p) => Declaration::FunctionPrototype(translate_function_prototype(state, p)),
-        syntax::Declaration::Global(ty, ids) => Declaration::Global(panic!(), panic!()),
+        syntax::Declaration::Global(ty, ids) => {
+            // glsl non-es supports requalifying variables
+            // we don't right now
+            Declaration::Global(panic!(), panic!())
+        },
         syntax::Declaration::InitDeclaratorList(dl) => translate_init_declarator_list(state, dl),
         syntax::Declaration::Precision(p, ts) => Declaration::Precision(p.clone(), ts.clone()),
     }
@@ -1278,7 +1281,8 @@ fn translate_expression(state: &mut State, e: &syntax::Expr) -> Expr {
                 None => panic!("missing declaration {}", i.as_str())
             };
             let ty = match &state.sym(sym).decl {
-                SymDecl::Variable(_, ty) => ty.clone(),
+                SymDecl::Global(_, ty) => ty.clone(),
+                SymDecl::Local(_, ty) => ty.clone(),
                 _ => panic!("bad variable type")
             };
             Expr { kind: ExprKind::Variable(sym), ty }
@@ -1653,7 +1657,7 @@ fn translate_function_parameter_declaration(state: &mut State, p: &syntax::Funct
 
             ty.precision = get_precision(qual);
 
-            let decl = SymDecl::Variable(
+            let decl = SymDecl::Global(
                 StorageClass::None,
                 ty.clone());
             let d = FunctionParameterDeclarator {
@@ -1712,10 +1716,12 @@ fn translate_function_definition(state: &mut State, fd: &syntax::FunctionDefinit
     state.declare(fd.prototype.name.as_str(), SymDecl::Function(FunctionType{ signatures: NonEmpty::new(sig)}));
 
     state.push_scope(fd.prototype.name.as_str().into());
+    state.in_function = true;
     let f = FunctionDefinition {
         prototype,
         statement: translate_compound_statement(state, &fd.statement)
     };
+    state.in_function = false;
     state.pop_scope();
     f
 }
@@ -1949,9 +1955,9 @@ pub fn ast_to_hir(state: &mut State, tu: &syntax::TranslationUnit) -> Translatio
                      vec![Type::new(Mat3)]);
     declare_function(state, "normalize", Type::new(Vec2),
                      vec![Type::new(Vec2)]);
-    state.declare("gl_FragCoord", SymDecl::Variable(StorageClass::Out, Type::new(Vec4)));
-    state.declare("gl_FragColor", SymDecl::Variable(StorageClass::Out, Type::new(Vec4)));
-    state.declare("gl_Position", SymDecl::Variable(StorageClass::Out, Type::new(Vec4)));
+    state.declare("gl_FragCoord", SymDecl::Global(StorageClass::Out, Type::new(Vec4)));
+    state.declare("gl_FragColor", SymDecl::Global(StorageClass::Out, Type::new(Vec4)));
+    state.declare("gl_Position", SymDecl::Global(StorageClass::Out, Type::new(Vec4)));
 
 
     TranslationUnit(tu.0.map(state, translate_external_declaration))

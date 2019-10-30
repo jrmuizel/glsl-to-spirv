@@ -1009,7 +1009,16 @@ pub fn translate_single_declaration(state: &mut OutputState, d: &hir::SingleDecl
   let ty = emit_type(state, &d.ty);
 
   let storage = match &state.hir.sym(d.name).decl {
-    hir::SymDecl::Variable(storage, _) => {
+    hir::SymDecl::Global(storage, _) => {
+      match storage {
+        hir::StorageClass::Const => spirv::StorageClass::UniformConstant,
+        hir::StorageClass::Out => spirv::StorageClass::Output,
+        hir::StorageClass::In => spirv::StorageClass::Input,
+        hir::StorageClass::Uniform => spirv::StorageClass::Uniform,
+        hir::StorageClass::None => spirv::StorageClass::Function
+      }
+    }
+    hir::SymDecl::Local(storage, _) => {
       match storage {
         hir::StorageClass::Const => spirv::StorageClass::UniformConstant,
         hir::StorageClass::Out => spirv::StorageClass::Output,
