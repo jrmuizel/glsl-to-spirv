@@ -143,8 +143,8 @@ pub fn show_identifier<F>(f: &mut F, i: &syntax::Identifier) where F: Write {
 }
 
 pub fn show_sym<F>(f: &mut F, state: &mut OutputState, i: &hir::SymRef) where F: Write {
-  let name = state.hir.sym(*i).name.as_str();
-  let _ = f.write_str(name);
+  let sym = state.hir.sym(*i);
+  let _ = f.write_str(&sym.name);
 }
 
 pub fn show_type_name<F>(f: &mut F, t: &syntax::TypeName) where F: Write {
@@ -540,7 +540,7 @@ pub fn emit_sym(state: &mut OutputState, s: hir::SymRef) -> Word {
   match state.emitted_syms.get(&s) {
     Some(s) => s.location,
     None => {
-      let name = &state.hir.sym(s).name;
+      let name = state.hir.sym(s).name.clone();
       match name.as_ref() {
         "gl_FragColor" => {
           // XXX: we emit these special variables lazily
@@ -591,8 +591,8 @@ pub fn translate_r_val(state: &mut OutputState, expr: &hir::Expr) -> Word {
     hir::ExprKind::FunCall(ref fun, ref args) => {
       match fun {
         hir::FunIdentifier::Identifier(ref sym) => {
-          let name = state.hir.sym(*sym).name.as_str();
-            match name {
+          let name = state.hir.sym(*sym).name.as_str().to_owned();
+            match name.as_ref() {
               "vec4" => {
                 match args[..] {
                   [ref x, ref y, ref w, ref z] => translate_vec4(state, x, y, w, z),
@@ -731,6 +731,7 @@ pub fn show_hir_expr<F>(f: &mut F, state: &mut OutputState, expr: &hir::Expr) wh
       let _ = f.write_str(", ");
       show_hir_expr(f, state, &b);
     }
+    hir::ExprKind::CondMask | hir::ExprKind::Cond(..) => { panic!() }
   }
 }
 
@@ -984,7 +985,7 @@ pub fn show_function_parameter_declaration<F>(f: &mut F, state: &mut OutputState
 pub fn show_function_parameter_declarator<F>(f: &mut F, state: &mut OutputState, p: &hir::FunctionParameterDeclarator) where F: Write {
   show_type(f, state, &p.ty);
   let _ = f.write_str(" ");
-  show_arrayed_identifier(f, &p.ident, &p.ty);
+  show_arrayed_identifier(f, &p.name, &p.ty);
 }
 
 pub fn show_init_declarator_list<F>(f: &mut F, state: &mut OutputState, i: &hir::InitDeclaratorList) where F: Write {
@@ -1017,7 +1018,7 @@ pub fn translate_single_declaration(state: &mut OutputState, d: &hir::SingleDecl
         hir::StorageClass::None => spirv::StorageClass::Function
       }
     }
-    hir::SymDecl::Local(storage, _) => {
+    hir::SymDecl::Local(storage, _, _) => {
       match storage {
         hir::StorageClass::Const => spirv::StorageClass::UniformConstant,
         hir::StorageClass::Out => spirv::StorageClass::Output,
@@ -1133,7 +1134,7 @@ pub fn translate_function_definition(state: &mut OutputState, fd: &hir::Function
 
     b.begin_basic_block(None).unwrap();
   }
-  translate_compound_statement(state, &fd.statement);
+  translate_compound_statement(state, &fd.body);
 
   let b = &mut state.builder;
   b.ret().unwrap();
